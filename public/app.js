@@ -25,26 +25,39 @@ window.fetch = async function(url, opts) {
   return res;
 };
 
+const TABS = {
+  tasks:   { panel: 'tab-tasks',     load: loadTasks },
+  create:  { panel: 'admin-panel',   load: loadUsers },
+  archive: { panel: 'archive-panel', load: loadArchive }
+};
+
+function switchTab(name) {
+  if (!TABS[name]) name = 'tasks';
+  Object.keys(TABS).forEach(function(k) {
+    const p = document.getElementById(TABS[k].panel);
+    if (p) p.style.display = (k === name) ? 'block' : 'none';
+  });
+  document.querySelectorAll('.nav-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
+  const t = TABS[name];
+  if (t && typeof t.load === 'function') t.load();
+}
+
 function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
-  document.getElementById('admin-panel').style.display = 'none';
-  document.getElementById('archive-panel').style.display = 'none';
 }
 
 function showDashboard() {
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  if (role === 'admin') {
-    document.getElementById('admin-panel').style.display = 'block';
-    document.getElementById('archive-panel').style.display = 'block';
-    loadUsers();
-    loadArchive();
-  } else {
-    document.getElementById('admin-panel').style.display = 'none';
-    document.getElementById('archive-panel').style.display = 'none';
-  }
-  loadTasks();
+  const isAdmin = role === 'admin';
+  const nc = document.getElementById('nav-create');
+  const na = document.getElementById('nav-archive');
+  if (nc) nc.style.display = isAdmin ? '' : 'none';
+  if (na) na.style.display = isAdmin ? '' : 'none';
+  switchTab('tasks');
 }
 
 async function login() {
@@ -104,13 +117,13 @@ async function loadTasks() {
       var p = [];
       p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
       p.push('<br>' + escapeHtml(t.description));
-      p.push('<br><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '</small>');
+      p.push('<br><small>\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014') + '</small>');
       p.push('<div class="task-actions">');
       ['new', 'in_progress', 'done'].forEach(function(s) {
         p.push('<button data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + s + '</button> ');
       });
       if (role === 'admin') {
-        p.push('<button data-act="delete" data-id="' + t.id + '">Удалить</button>');
+        p.push('<button data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>');
       }
       p.push('</div>');
       return '<li>' + p.join('') + '</li>';
@@ -127,9 +140,9 @@ async function loadArchive() {
     list.innerHTML = tasks.map(function(t) {
       var p = [];
       p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
-      p.push('<br><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '</small>');
+      p.push('<br><small>\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014') + '</small>');
       p.push('<div class="task-actions">');
-      p.push('<button data-act="restore" data-id="' + t.id + '">Восстановить</button>');
+      p.push('<button data-act="restore" data-id="' + t.id + '">\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c</button>');
       p.push('</div>');
       return '<li>' + p.join('') + '</li>';
     }).join('');
@@ -151,13 +164,17 @@ async function createTask() {
     if (res.ok) {
       document.getElementById('task-title').value = '';
       document.getElementById('task-desc').value = '';
-      loadTasks();
-      loadArchive();
+      switchTab('tasks');
     } else {
       alert(data.error);
     }
   } catch (e) { console.error('createTask', e); }
 }
+
+document.querySelector('.main-nav').addEventListener('click', function(e) {
+  const btn = e.target.closest('.nav-btn');
+  if (btn) switchTab(btn.dataset.tab);
+});
 
 document.getElementById('task-list').addEventListener('click', async function(e) {
   const btn = e.target.closest('button');
@@ -173,11 +190,10 @@ document.getElementById('task-list').addEventListener('click', async function(e)
       });
       if (!r.ok) { const d = await r.json(); alert(d.error); return; }
     } else if (act === 'delete') {
-      if (!confirm('Удалить задачу?')) return;
+      if (!confirm('\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0443?')) return;
       await fetch(API + '/tasks/' + id, { method: 'DELETE' });
     }
     loadTasks();
-    if (role === 'admin') loadArchive();
   } catch (err) { console.error('action', err); }
 });
 

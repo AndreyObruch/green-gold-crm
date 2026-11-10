@@ -8,28 +8,57 @@
 </head>
 <body>
     <div id="app">
-        <div id="login-form" style="display: none;">
-            <h2>Вход в Green Gold CRM</h2>
-            <input type="text" id="username" placeholder="Логин">
-            <input type="password" id="password" placeholder="Пароль">
-            <button onclick="login()">Войти</button>
-        </div>
-        <div id="dashboard" style="display: none;">
-            <header>
-                <h1>Green Gold CRM</h1>
-                <button onclick="logout()">Выйти</button>
-            </header>
-            <div id="admin-panel" style="display: none;">
-                <h3>Создать задачу</h3>
-                <input type="text" id="task-title" placeholder="Название">
-                <textarea id="task-desc" placeholder="Описание"></textarea>
-                <select id="task-assignee"></select>
-                <button onclick="createTask()">Создать</button>
+        <div id="login-form" class="login-card" style="display: none;">
+            <h2>Green Gold CRM</h2>
+            <p class="small-note">Вход в систему</p>
+            <div class="field">
+                <label for="username">Логин</label>
+                <input type="text" id="username" placeholder="Логин" autocomplete="username">
             </div>
-            <h3>Задачи</h3>
-            <ul id="task-list"></ul>
-            <div id="archive-panel" style="display: none;">
-                <h3>Архив (удалённые)</h3>
+            <div class="field">
+                <label for="password">Пароль</label>
+                <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="login()">Войти</button>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <header class="topbar">
+                <h1 class="brand">Green Gold CRM</h1>
+                <nav class="main-nav">
+                    <button class="nav-btn active" data-tab="tasks">Задачи</button>
+                    <button class="nav-btn" data-tab="create" id="nav-create">Создать задачу</button>
+                    <button class="nav-btn" data-tab="archive" id="nav-archive">Архив</button>
+                </nav>
+                <button class="btn btn-ghost" onclick="logout()">Выйти</button>
+            </header>
+
+            <div id="tab-tasks" class="tab-panel">
+                <h3 class="section-title">Задачи</h3>
+                <ul id="task-list"></ul>
+            </div>
+
+            <div id="admin-panel" class="tab-panel" style="display: none;">
+                <h3 class="panel-title">Создать задачу</h3>
+                <div class="form-row">
+                    <div class="field">
+                        <label for="task-title">Название</label>
+                        <input type="text" id="task-title" placeholder="Название">
+                    </div>
+                    <div class="field">
+                        <label for="task-desc">Описание</label>
+                        <textarea id="task-desc" placeholder="Описание"></textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="task-assignee">Исполнитель</label>
+                    <select id="task-assignee"></select>
+                </div>
+                <button class="btn btn-gold" onclick="createTask()">Создать</button>
+            </div>
+
+            <div id="archive-panel" class="tab-panel" style="display: none;">
+                <h3 class="panel-title">Архив (удалённые)</h3>
                 <ul id="archive-list"></ul>
             </div>
         </div>
