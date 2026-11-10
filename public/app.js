@@ -2,6 +2,19 @@ const API = '/api';
 let token = localStorage.getItem('token');
 let role = localStorage.getItem('role');
 
+// Глобальный перехват: любой не-auth запрос с 401 => сессия протухла/невалидна => выход
+const _rawFetch = window.fetch.bind(window);
+window.fetch = async function(url, opts) {
+  const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
+  if (!isAuth && token) {
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+  }
+  const res = await _rawFetch(url, opts);
+  if (!isAuth && res.status === 401) { logout(); }
+  return res;
+};
+
 function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
@@ -57,7 +70,7 @@ function logout() {
 
 async function loadUsers() {
   try {
-    const res = await fetch(API + '/users', { headers: { 'Authorization': 'Bearer ' + token } });
+    const res = await fetch(API + '/users');
     const users = await res.json();
     const sel = document.getElementById('task-assignee');
     sel.innerHTML = '';
@@ -73,7 +86,7 @@ async function loadUsers() {
 
 async function loadTasks() {
   try {
-    const res = await fetch(API + '/tasks', { headers: { 'Authorization': 'Bearer ' + token } });
+    const res = await fetch(API + '/tasks');
     const tasks = await res.json();
     const list = document.getElementById('task-list');
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
@@ -97,7 +110,7 @@ async function loadTasks() {
 
 async function loadArchive() {
   try {
-    const res = await fetch(API + '/tasks/archive', { headers: { 'Authorization': 'Bearer ' + token } });
+    const res = await fetch(API + '/tasks/archive');
     const tasks = await res.json();
     const list = document.getElementById('archive-list');
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
@@ -121,7 +134,7 @@ async function createTask() {
   try {
     const res = await fetch(API + '/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: title, description: description, assignee_id: assigneeId })
     });
     const data = await res.json();
@@ -129,6 +142,7 @@ async function createTask() {
       document.getElementById('task-title').value = '';
       document.getElementById('task-desc').value = '';
       loadTasks();
+      loadArchive();
     } else {
       alert(data.error);
     }
@@ -144,13 +158,13 @@ document.getElementById('task-list').addEventListener('click', async function(e)
     if (act === 'status') {
       const r = await fetch(API + '/tasks/' + id, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: btn.dataset.val })
       });
       if (!r.ok) { const d = await r.json(); alert(d.error); return; }
     } else if (act === 'delete') {
       if (!confirm('Удалить задачу?')) return;
-      await fetch(API + '/tasks/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+      await fetch(API + '/tasks/' + id, { method: 'DELETE' });
     }
     loadTasks();
     if (role === 'admin') loadArchive();
@@ -161,10 +175,7 @@ document.getElementById('archive-list').addEventListener('click', async function
   const btn = e.target.closest('button');
   if (!btn || btn.dataset.act !== 'restore') return;
   try {
-    const r = await fetch(API + '/tasks/' + btn.dataset.id + '/restore', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
+    const r = await fetch(API + '/tasks/' + btn.dataset.id + '/restore', { method: 'POST' });
     if (!r.ok) { const d = await r.json(); alert(d.error); return; }
     loadTasks();
     loadArchive();
