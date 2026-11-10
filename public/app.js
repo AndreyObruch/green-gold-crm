@@ -5,6 +5,7 @@ let role = localStorage.getItem('role');
 function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('admin-panel').style.display = 'none';
 }
 
 function showDashboard() {
@@ -12,6 +13,8 @@ function showDashboard() {
   document.getElementById('dashboard').style.display = 'block';
   if (role === 'admin') {
     document.getElementById('admin-panel').style.display = 'block';
+  } else {
+    document.getElementById('admin-panel').style.display = 'none';
   }
   loadTasks();
 }
