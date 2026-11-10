@@ -19,6 +19,14 @@ router.get('/', auth, (req, res) => {
   });
 });
 
+router.get('/archive', auth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+  db.all('SELECT t.*, u.username AS assignee_username, c.username AS creator_username FROM tasks t LEFT JOIN users u ON t.assignee_id = u.id LEFT JOIN users c ON t.creator_id = c.id WHERE t.deleted = 1 ORDER BY t.created_at DESC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 router.post('/', auth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
   const { title, description, assignee_id } = req.body;
@@ -58,6 +66,15 @@ router.patch('/:id', auth, (req, res) => {
       res.json({ updated: this.changes });
     });
   }
+});
+
+router.post('/:id/restore', auth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+  db.run('UPDATE tasks SET deleted = 0 WHERE id = ? AND deleted = 1', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Task not found in archive' });
+    res.json({ restored: this.changes });
+  });
 });
 
 router.delete('/:id', auth, (req, res) => {
