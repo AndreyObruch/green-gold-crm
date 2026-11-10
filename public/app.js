@@ -6,6 +6,7 @@ function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('archive-panel').style.display = 'none';
 }
 
 function showDashboard() {
@@ -13,9 +14,12 @@ function showDashboard() {
   document.getElementById('dashboard').style.display = 'block';
   if (role === 'admin') {
     document.getElementById('admin-panel').style.display = 'block';
+    document.getElementById('archive-panel').style.display = 'block';
     loadUsers();
+    loadArchive();
   } else {
     document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('archive-panel').style.display = 'none';
   }
   loadTasks();
 }
@@ -91,6 +95,24 @@ async function loadTasks() {
   } catch (e) { console.error('loadTasks', e); }
 }
 
+async function loadArchive() {
+  try {
+    const res = await fetch(API + '/tasks/archive', { headers: { 'Authorization': 'Bearer ' + token } });
+    const tasks = await res.json();
+    const list = document.getElementById('archive-list');
+    if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
+    list.innerHTML = tasks.map(function(t) {
+      var p = [];
+      p.push('<b>' + t.title + '</b> [' + t.status + ']');
+      p.push('<br><small>Исполнитель: ' + (t.assignee_username || '—') + '</small>');
+      p.push('<div class="task-actions">');
+      p.push('<button data-act="restore" data-id="' + t.id + '">Восстановить</button>');
+      p.push('</div>');
+      return '<li>' + p.join('') + '</li>';
+    }).join('');
+  } catch (e) { console.error('loadArchive', e); }
+}
+
 async function createTask() {
   const title = document.getElementById('task-title').value;
   const description = document.getElementById('task-desc').value;
@@ -131,7 +153,22 @@ document.getElementById('task-list').addEventListener('click', async function(e)
       await fetch(API + '/tasks/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
     }
     loadTasks();
+    if (role === 'admin') loadArchive();
   } catch (err) { console.error('action', err); }
+});
+
+document.getElementById('archive-list').addEventListener('click', async function(e) {
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.act !== 'restore') return;
+  try {
+    const r = await fetch(API + '/tasks/' + btn.dataset.id + '/restore', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!r.ok) { const d = await r.json(); alert(d.error); return; }
+    loadTasks();
+    loadArchive();
+  } catch (err) { console.error('restore', err); }
 });
 
 if (token) { showDashboard(); } else { showLogin(); }
