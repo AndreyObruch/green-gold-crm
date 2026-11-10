@@ -7,11 +7,10 @@ const router = express.Router();
 const TOKEN_TTL = '8h';
 
 router.post('/register', async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-  const allowedRoles = ['admin', 'executor'];
-  const userRole = allowedRoles.includes(role) ? role : 'executor';
+  const userRole = 'executor'; // роль из тела игнорируется: публичная регистрация не даёт admin
 
   try {
     const hash = await bcrypt.hash(String(password), 10);
