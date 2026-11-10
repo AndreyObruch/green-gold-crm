@@ -3,6 +3,8 @@ const db = require('../db/db');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
+const ALLOWED_STATUS = ['new', 'in_progress', 'done'];
+
 router.get('/', auth, (req, res) => {
   let query = 'SELECT t.*, u.username AS assignee_username, c.username AS creator_username FROM tasks t LEFT JOIN users u ON t.assignee_id = u.id LEFT JOIN users c ON t.creator_id = c.id';
   let params = [];
@@ -32,16 +34,31 @@ router.post('/', auth, (req, res) => {
 
 router.patch('/:id', auth, (req, res) => {
   const { status, assignee_id } = req.body;
+  if (status && !ALLOWED_STATUS.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
   const updates = [];
   const params = [];
   if (status) { updates.push('status = ?'); params.push(status); }
   if (assignee_id && req.user.role === 'admin') { updates.push('assignee_id = ?'); params.push(assignee_id); }
   if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
-  params.push(req.params.id);
-  db.run('UPDATE tasks SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ updated: this.changes });
-  });
+
+  if (req.user.role === 'admin') {
+    params.push(req.params.id);
+    db.run('UPDATE tasks SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Task not found' });
+      res.json({ updated: this.changes });
+    });
+  } else {
+    // исполнитель меняет только свои назначенные задачи
+    params.push(req.params.id, req.user.id);
+    db.run('UPDATE tasks SET ' + updates.join(', ') + ' WHERE id = ? AND assignee_id = ?', params, function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(403).json({ error: 'Access denied' });
+      res.json({ updated: this.changes });
+    });
+  }
 });
 
 router.delete('/:id', auth, (req, res) => {
