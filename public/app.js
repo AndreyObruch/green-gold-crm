@@ -2,6 +2,16 @@ const API = '/api';
 let token = localStorage.getItem('token');
 let role = localStorage.getItem('role');
 
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const _rawFetch = window.fetch.bind(window);
 window.fetch = async function(url, opts) {
   const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
@@ -92,9 +102,9 @@ async function loadTasks() {
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
     list.innerHTML = tasks.map(function(t) {
       var p = [];
-      p.push('<b>' + t.title + '</b> [' + t.status + ']');
-      p.push('<br>' + (t.description || ''));
-      p.push('<br><small>Исполнитель: ' + (t.assignee_username || '—') + '</small>');
+      p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
+      p.push('<br>' + escapeHtml(t.description));
+      p.push('<br><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '</small>');
       p.push('<div class="task-actions">');
       ['new', 'in_progress', 'done'].forEach(function(s) {
         p.push('<button data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + s + '</button> ');
@@ -116,8 +126,8 @@ async function loadArchive() {
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
     list.innerHTML = tasks.map(function(t) {
       var p = [];
-      p.push('<b>' + t.title + '</b> [' + t.status + ']');
-      p.push('<br><small>Исполнитель: ' + (t.assignee_username || '—') + '</small>');
+      p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
+      p.push('<br><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '</small>');
       p.push('<div class="task-actions">');
       p.push('<button data-act="restore" data-id="' + t.id + '">Восстановить</button>');
       p.push('</div>');
