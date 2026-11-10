@@ -3,3 +3,5 @@ input, textarea, select { display: block; width: 100%; margin-bottom: 10px; padd
 button { padding: 8px 16px; cursor: pointer; }
 #task-list { list-style-type: none; padding: 0; }
 #task-list li { background: #f4f4f4; margin: 5px 0; padding: 10px; border-radius: 4px; }
+.task-actions { margin-top: 6px; }
+.task-actions button { margin-right: 4px; padding: 4px 8px; font-size: 12px; }
