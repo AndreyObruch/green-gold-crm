@@ -5,6 +5,16 @@ const router = express.Router();
 
 const ALLOWED_STATUS = ['new', 'in_progress', 'done'];
 
+function validAssignee(id, cb) {
+  if (id === null || id === undefined || id === '') return cb(true);
+  const num = parseInt(id, 10);
+  if (isNaN(num)) return cb(false);
+  db.get('SELECT id FROM users WHERE id = ?', [num], (err, row) => {
+    if (err) return cb(false);
+    cb(!!row);
+  });
+}
+
 router.get('/', auth, (req, res) => {
   let query = 'SELECT t.*, u.username AS assignee_username, c.username AS creator_username FROM tasks t LEFT JOIN users u ON t.assignee_id = u.id LEFT JOIN users c ON t.creator_id = c.id WHERE t.deleted = 0';
   let params = [];
@@ -31,13 +41,16 @@ router.post('/', auth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
   const { title, description, assignee_id } = req.body;
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'Title required' });
-  db.run('INSERT INTO tasks (title, description, assignee_id, creator_id, deleted) VALUES (?, ?, ?, ?, 0)',
-    [String(title).trim(), description || null, assignee_id || null, req.user.id],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
-    }
-  );
+  validAssignee(assignee_id, function(ok) {
+    if (!ok) return res.status(400).json({ error: 'Invalid assignee_id' });
+    db.run('INSERT INTO tasks (title, description, assignee_id, creator_id, deleted) VALUES (?, ?, ?, ?, 0)',
+      [String(title).trim(), description || null, assignee_id ? parseInt(assignee_id, 10) : null, req.user.id],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID });
+      }
+    );
+  });
 });
 
 router.patch('/:id', auth, (req, res) => {
@@ -48,9 +61,20 @@ router.patch('/:id', auth, (req, res) => {
   const updates = [];
   const params = [];
   if (status) { updates.push('status = ?'); params.push(status); }
-  if (assignee_id && req.user.role === 'admin') { updates.push('assignee_id = ?'); params.push(assignee_id); }
+  if (assignee_id && req.user.role === 'admin') {
+    validAssignee(assignee_id, function(ok) {
+      if (!ok) return res.status(400).json({ error: 'Invalid assignee_id' });
+      updates.push('assignee_id = ?'); params.push(parseInt(assignee_id, 10));
+      applyPatch(req, res, updates, params);
+    });
+    return;
+  }
   if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+  applyPatch(req, res, updates, params);
+});
 
+function applyPatch(req, res, updates, params) {
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
   if (req.user.role === 'admin') {
     params.push(req.params.id);
     db.run('UPDATE tasks SET ' + updates.join(', ') + ' WHERE id = ? AND deleted = 0', params, function(err) {
@@ -66,7 +90,7 @@ router.patch('/:id', auth, (req, res) => {
       res.json({ updated: this.changes });
     });
   }
-});
+}
 
 router.post('/:id/restore', auth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
