@@ -1,6 +1,6 @@
 const API = '/api';
-let token = localStorage.getItem('token');
-let role = localStorage.getItem('role');
+let token = null;
+let role = null;
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -208,4 +208,9 @@ document.getElementById('archive-list').addEventListener('click', async function
   } catch (err) { console.error('restore', err); }
 });
 
-if (token) { showDashboard(); } else { showLogin(); }
+// \u0421\u0442\u0430\u0440\u0442: \u0432\u0441\u0435\u0433\u0434\u0430 \u0444\u043e\u0440\u043c\u0430 \u0432\u0445\u043e\u0434\u0430, \u0431\u0435\u0437 \u0430\u0432\u0442\u043e-\u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \u0441\u0435\u0441\u0441\u0438\u0438
+localStorage.removeItem('token');
+localStorage.removeItem('role');
+token = null;
+role = null;
+showLogin();
