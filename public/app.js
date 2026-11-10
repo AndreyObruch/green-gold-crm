@@ -2,13 +2,13 @@ const API = '/api';
 let token = localStorage.getItem('token');
 let role = localStorage.getItem('role');
 
-// Глобальный перехват: любой не-auth запрос с 401 => сессия протухла/невалидна => выход
 const _rawFetch = window.fetch.bind(window);
 window.fetch = async function(url, opts) {
   const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
-  if (!isAuth && token) {
+  const liveToken = localStorage.getItem('token');
+  if (!isAuth && liveToken) {
     opts = opts || {};
-    opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+    opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + liveToken });
   }
   const res = await _rawFetch(url, opts);
   if (!isAuth && res.status === 401) { logout(); }
