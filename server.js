@@ -3,6 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET missing in .env — refusing to start (token forgery risk).');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
