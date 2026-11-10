@@ -19,8 +19,9 @@ router.get('/', auth, (req, res) => {
 router.post('/', auth, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
   const { title, description, assignee_id } = req.body;
+  if (!title || !String(title).trim()) return res.status(400).json({ error: 'Title required' });
   db.run('INSERT INTO tasks (title, description, assignee_id, creator_id) VALUES (?, ?, ?, ?)',
-    [title, description, assignee_id, req.user.id],
+    [String(title).trim(), description || null, assignee_id || null, req.user.id],
     function(err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ id: this.lastID });
@@ -34,11 +35,9 @@ router.patch('/:id', auth, (req, res) => {
   const params = [];
   if (status) { updates.push('status = ?'); params.push(status); }
   if (assignee_id && req.user.role === 'admin') { updates.push('assignee_id = ?'); params.push(assignee_id); }
-  
   if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
-  
   params.push(req.params.id);
-  db.run(`UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`, params, function(err) {
+  db.run('UPDATE tasks SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ updated: this.changes });
   });
