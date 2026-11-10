@@ -4,12 +4,13 @@ const auth = require('../middleware/auth');
 const router = express.Router();
 
 router.get('/', auth, (req, res) => {
-  let query = 'SELECT * FROM tasks';
+  let query = 'SELECT t.*, u.username AS assignee_username, c.username AS creator_username FROM tasks t LEFT JOIN users u ON t.assignee_id = u.id LEFT JOIN users c ON t.creator_id = c.id';
   let params = [];
   if (req.user.role !== 'admin') {
-    query += ' WHERE assignee_id = ?';
+    query += ' WHERE t.assignee_id = ?';
     params.push(req.user.id);
   }
+  query += ' ORDER BY t.created_at DESC';
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
