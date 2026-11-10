@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Gold CRM</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="login-form" style="display: none;">
+            <h2>Вход в Green Gold CRM</h2>
+            <input type="text" id="username" placeholder="Логин">
+            <input type="password" id="password" placeholder="Пароль">
+            <button onclick="login()">Войти</button>
+        </div>
+        <div id="dashboard" style="display: none;">
+            <header>
+                <h1>Green Gold CRM</h1>
+                <button onclick="logout()">Выйти</button>
+            </header>
+            <div id="admin-panel" style="display: none;">
+                <h3>Создать задачу</h3>
+                <input type="text" id="task-title" placeholder="Название">
+                <textarea id="task-desc" placeholder="Описание"></textarea>
+                <select id="task-assignee"></select>
+                <button onclick="createTask()">Создать</button>
+            </div>
+            <h3>Задачи</h3>
+            <ul id="task-list"></ul>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
