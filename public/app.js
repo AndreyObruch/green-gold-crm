@@ -12,6 +12,17 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+function statusClass(s) {
+  return ({ 'new': 'st-new', 'in_progress': 'st-prog', 'done': 'st-done' })[s] || 'st-other';
+}
+function statusLabel(s) {
+  return ({ 'new': '\u041d\u043e\u0432\u0430\u044f', 'in_progress': '\u0412 \u0440\u0430\u0431\u043e\u0442\u0435', 'done': '\u0413\u043e\u0442\u043e\u0432\u043e' })[s] || escapeHtml(s);
+}
+function fmtDate(s) {
+  if (!s) return '';
+  return String(s).slice(0, 16).replace('T', ' ');
+}
+
 const _rawFetch = window.fetch.bind(window);
 window.fetch = async function(url, opts) {
   const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
@@ -114,19 +125,24 @@ async function loadTasks() {
     const list = document.getElementById('task-list');
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
     list.innerHTML = tasks.map(function(t) {
-      var p = [];
-      p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
-      p.push('<br>' + escapeHtml(t.description));
-      p.push('<br><small>\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014') + '</small>');
-      p.push('<div class="task-actions">');
+      var badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
+      var head = '<div class="task-head"><b class="task-title-text">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
+      var desc = (t.description && String(t.description).trim())
+        ? '<div class="task-desc">' + escapeHtml(String(t.description)).replace(/\n/g, '<br>') + '</div>'
+        : '';
+      var mp = ['\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014')];
+      if (t.creator_username) mp.push('\u0421\u043e\u0437\u0434\u0430\u043b: ' + escapeHtml(t.creator_username));
+      var d = fmtDate(t.created_at); if (d) mp.push(d);
+      var meta = '<div class="task-meta"><small>' + mp.join(' \u00b7 ') + '</small></div>';
+      var acts = '<div class="task-actions">';
       ['new', 'in_progress', 'done'].forEach(function(s) {
-        p.push('<button data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + s + '</button> ');
+        acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
       });
       if (role === 'admin') {
-        p.push('<button data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>');
+        acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>';
       }
-      p.push('</div>');
-      return '<li>' + p.join('') + '</li>';
+      acts += '</div>';
+      return '<li class="task-card">' + head + desc + meta + acts + '</li>';
     }).join('');
   } catch (e) { console.error('loadTasks', e); }
 }
@@ -138,13 +154,14 @@ async function loadArchive() {
     const list = document.getElementById('archive-list');
     if (!Array.isArray(tasks)) { list.innerHTML = ''; return; }
     list.innerHTML = tasks.map(function(t) {
-      var p = [];
-      p.push('<b>' + escapeHtml(t.title) + '</b> [' + escapeHtml(t.status) + ']');
-      p.push('<br><small>\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014') + '</small>');
-      p.push('<div class="task-actions">');
-      p.push('<button data-act="restore" data-id="' + t.id + '">\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c</button>');
-      p.push('</div>');
-      return '<li>' + p.join('') + '</li>';
+      var badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
+      var head = '<div class="task-head"><b class="task-title-text">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
+      var mp = ['\u0418\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c: ' + escapeHtml(t.assignee_username || '\u2014')];
+      if (t.creator_username) mp.push('\u0421\u043e\u0437\u0434\u0430\u043b: ' + escapeHtml(t.creator_username));
+      var d = fmtDate(t.created_at); if (d) mp.push(d);
+      var meta = '<div class="task-meta"><small>' + mp.join(' \u00b7 ') + '</small></div>';
+      var acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c</button></div>';
+      return '<li class="task-card">' + head + meta + acts + '</li>';
     }).join('');
   } catch (e) { console.error('loadArchive', e); }
 }
@@ -208,7 +225,7 @@ document.getElementById('archive-list').addEventListener('click', async function
   } catch (err) { console.error('restore', err); }
 });
 
-// \u0421\u0442\u0430\u0440\u0442: \u0432\u0441\u0435\u0433\u0434\u0430 \u0444\u043e\u0440\u043c\u0430 \u0432\u0445\u043e\u0434\u0430, \u0431\u0435\u0437 \u0430\u0432\u0442\u043e-\u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u044f \u0441\u0435\u0441\u0441\u0438\u0438
+// Start: always login form, no session auto-restore
 localStorage.removeItem('token');
 localStorage.removeItem('role');
 token = null;
