@@ -13,6 +13,7 @@ function showDashboard() {
   document.getElementById('dashboard').style.display = 'block';
   if (role === 'admin') {
     document.getElementById('admin-panel').style.display = 'block';
+    loadUsers();
   } else {
     document.getElementById('admin-panel').style.display = 'none';
   }
@@ -50,6 +51,26 @@ function logout() {
   showLogin();
 }
 
+async function loadUsers() {
+  try {
+    const res = await fetch(API + '/users', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const users = await res.json();
+    const sel = document.getElementById('task-assignee');
+    sel.innerHTML = '';
+    if (!Array.isArray(users)) return;
+    users.forEach(function(u) {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.username + ' (' + u.role + ')';
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.error('loadUsers error', e);
+  }
+}
+
 async function loadTasks() {
   try {
     const res = await fetch(API + '/tasks', {
@@ -69,6 +90,8 @@ async function loadTasks() {
 async function createTask() {
   const title = document.getElementById('task-title').value;
   const description = document.getElementById('task-desc').value;
+  const assigneeRaw = document.getElementById('task-assignee').value;
+  const assigneeId = assigneeRaw ? parseInt(assigneeRaw, 10) : null;
   try {
     const res = await fetch(API + '/tasks', {
       method: 'POST',
@@ -76,7 +99,7 @@ async function createTask() {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
       },
-      body: JSON.stringify({ title: title, description: description, assignee_id: 1 })
+      body: JSON.stringify({ title: title, description: description, assignee_id: assigneeId })
     });
     if (res.ok) {
       document.getElementById('task-title').value = '';
