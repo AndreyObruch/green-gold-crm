@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/db');
 const router = express.Router();
 
+const TOKEN_TTL = '8h';
+
 router.post('/register', async (req, res) => {
   const { username, password, role } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -43,7 +45,8 @@ router.post('/login', (req, res) => {
 
       const token = jwt.sign(
         { id: user.id, username: user.username, role: user.role },
-        process.env.JWT_SECRET
+        process.env.JWT_SECRET,
+        { expiresIn: TOKEN_TTL }
       );
 
       res.json({ token, role: user.role });
