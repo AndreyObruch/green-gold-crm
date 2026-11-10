@@ -43,4 +43,12 @@ router.patch('/:id', auth, (req, res) => {
   });
 });
 
+router.delete('/:id', auth, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+  db.run('DELETE FROM tasks WHERE id = ?', [req.params.id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ deleted: this.changes });
+  });
+});
+
 module.exports = router;
