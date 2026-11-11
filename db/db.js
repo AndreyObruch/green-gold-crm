@@ -15,6 +15,10 @@ db.exec(initSql, (err) => {
     db.run('CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, username TEXT, action TEXT, entity TEXT, entity_id INTEGER, detail TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)', (e2) => {
       if (e2) console.error('Migration error (audit_log):', e2);
       else console.log('Audit log table ready');
+      db.run('CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, uploader_id INTEGER, original_name TEXT, stored_name TEXT, mime TEXT, size INTEGER, sha256 TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)', (e3) => {
+        if (e3) console.error('Migration error (files):', e3);
+        else console.log('Files table ready');
+      });
     });
   });
 });
