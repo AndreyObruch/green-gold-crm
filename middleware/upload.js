@@ -80,13 +80,9 @@ function startsWith(buf, sig) {
 function isProbablyText(buf) {
   if (!buf || buf.length === 0) return true;
 
-  // UTF-16 BOM допускается, но дальше не должно быть null-байтов в характерных местах.
   if (startsWith(buf, [0xFF, 0xFE]) || startsWith(buf, [0xFE, 0xFF])) return true;
-
-  // UTF-8 BOM.
   if (startsWith(buf, [0xEF, 0xBB, 0xBF])) return true;
 
-  // Обычный текст: запрещаем null-байты, как признак бинарного файла.
   return buf.indexOf(0x00) === -1;
 }
 
@@ -103,18 +99,17 @@ async function verifyMagic(filePath, extRaw) {
 
   switch (ext) {
     case '.pdf':
-      return startsWith(head, [0x25, 0x50, 0x44, 0x46]); // %PDF
+      return startsWith(head, [0x25, 0x50, 0x44, 0x46]);
 
     case '.png':
       return startsWith(head, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 
     case '.jpg':
     case '.jpeg':
-      return startsWith(head, [0xFF, 0xD8, 0xFF]);
+      return head.length >= 2 && head[0] === 0xFF && head[1] === 0xD8;
 
     case '.docx':
     case '.xlsx':
-      // ZIP-контейнер: PK\x03\x04 или пустой ZIP PK\x05\x06
       return head.length >= 4 &&
         head[0] === 0x50 &&
         head[1] === 0x4B &&
