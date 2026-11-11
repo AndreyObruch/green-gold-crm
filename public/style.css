@@ -180,6 +180,17 @@ input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
 .chip-del{background:rgba(224,90,77,.18);color:var(--danger-soft);border-color:rgba(224,90,77,.45)}
 .chip-restore{background:rgba(212,160,23,.16);color:var(--gold-soft);border-color:rgba(212,160,23,.4)}
 
+.rules-drop{
+  position:fixed;top:76px;right:16px;z-index:65;display:none;
+  width:min(440px,calc(100vw - 32px));max-height:70vh;overflow-y:auto;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px 20px;
+}
+.rules-drop.open{display:block;animation:rise .2s ease both}
+.rules-drop h4{margin:0 0 8px;color:var(--gold-soft);font-size:.95rem}
+.rules-drop ol,.rules-drop ul{margin:0 0 12px;padding-left:18px;color:#c4d2c8;font-size:.88rem}
+.rules-drop li{margin-bottom:6px}
+
 .bulk-bar{
   position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;
   display:flex;gap:8px;align-items:center;padding:10px 16px;
@@ -224,6 +235,7 @@ input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
   .task-head{flex-direction:column;align-items:flex-start}
   .toolbar select{flex:1 1 100%}
   .drawer{width:100%}
+  .rules-drop{top:auto;bottom:16px;left:16px;right:16px;width:auto;max-height:60vh}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
