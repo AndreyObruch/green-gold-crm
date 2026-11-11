@@ -112,6 +112,39 @@ db.exec(initSql, (err) => {
         logMigration('Assignees backfill', e);
       }
     );
+
+    db.run(
+      'CREATE TABLE IF NOT EXISTS message_files (' +
+      'message_id INTEGER NOT NULL, ' +
+      'file_id INTEGER NOT NULL, ' +
+      'PRIMARY KEY (message_id, file_id)' +
+      ')',
+      function (e) {
+        logMigration('Message files table', e);
+      }
+    );
+
+    db.run(
+      'CREATE INDEX IF NOT EXISTS idx_message_files_message ON message_files(message_id)',
+      function (e) {
+        logMigration('Index message_files_message', e);
+      }
+    );
+
+    db.run(
+      'CREATE INDEX IF NOT EXISTS idx_message_files_file ON message_files(file_id)',
+      function (e) {
+        logMigration('Index message_files_file', e);
+      }
+    );
+
+    db.run(
+      'INSERT OR IGNORE INTO message_files (message_id, file_id) ' +
+      'SELECT id, file_id FROM messages WHERE file_id IS NOT NULL',
+      function (e) {
+        logMigration('Message files backfill', e);
+      }
+    );
   });
 });
 

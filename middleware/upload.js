@@ -4,49 +4,138 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const ALLOWED_EXT = ['.pdf', '.png', '.jpg', '.jpeg', '.docx', '.xlsx', '.csv', '.txt'];
-const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_FILES = 3;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+const ALLOWED_EXT = new Set([
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.docx',
+  '.xlsx',
+  '.csv',
+  '.txt',
+  '.md'
+]);
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+function decodeName(name) {
+  if (!name) return name;
+  try {
+    const fixed = Buffer.from(name, 'latin1').toString('utf8');
+    if (fixed.indexOf('\uFFFD') !== -1) return name;
+    return fixed;
+  } catch (e) {
+    return name;
+  }
+}
+
+function safeExt(originalname) {
+  const ext = path.extname(decodeName(originalname) || '').toLowerCase();
+  return ALLOWED_EXT.has(ext) ? ext : '';
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    cb(null, crypto.randomUUID() + ext);
+    const ext = safeExt(file.originalname) || path.extname(file.originalname).toLowerCase();
+    const base = Date.now() + '-' + crypto.randomBytes(8).toString('hex');
+    cb(null, base + ext);
   }
 });
 
-function fileFilter(req, file, cb) {
-  const ext = path.extname(file.originalname || '').toLowerCase();
-  if (!ALLOWED_EXT.includes(ext)) return cb(new Error('EXT_NOT_ALLOWED'));
-  cb(null, true);
-}
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_FILES,
+    fields: 20,
+    fieldSize: 1024 * 1024
+  }
+});
 
-const upload = multer({ storage: storage, fileFilter: fileFilter, limits: { fileSize: MAX_SIZE, files: MAX_FILES } });
-
-const SIGS = {
-  '.png': [0x89, 0x50, 0x4E, 0x47],
-  '.jpg': [0xFF, 0xD8, 0xFF],
-  '.jpeg': [0xFF, 0xD8, 0xFF],
-  '.pdf': [0x25, 0x50, 0x44, 0x66],
-  '.docx': [0x50, 0x4B, 0x03, 0x04],
-  '.xlsx': [0x50, 0x4B, 0x03, 0x04]
-};
-
-async function verifyMagic(filePath, ext) {
-  const sig = SIGS[ext];
-  if (!sig) return true;
-  const fh = await fs.promises.open(filePath, 'r');
+async function readHead(filePath, length = 1024) {
+  const fd = await fs.promises.open(filePath, 'r');
   try {
-    const buf = Buffer.alloc(sig.length);
-    const r = await fh.read(buf, 0, sig.length, 0);
-    if (r.bytesRead < sig.length) return false;
-    return sig.every((b, i) => buf[i] === b);
+    const buf = Buffer.alloc(length);
+    const { bytesRead } = await fd.read(buf, 0, length, 0);
+    return buf.slice(0, bytesRead);
   } finally {
-    await fh.close();
+    await fd.close();
   }
 }
 
-module.exports = { upload: upload, verifyMagic: verifyMagic, UPLOAD_DIR: UPLOAD_DIR, ALLOWED_EXT: ALLOWED_EXT, MAX_SIZE: MAX_SIZE, MAX_FILES: MAX_FILES };
+function startsWith(buf, sig) {
+  if (!buf || buf.length < sig.length) return false;
+  for (let i = 0; i < sig.length; i++) {
+    if (buf[i] !== sig[i]) return false;
+  }
+  return true;
+}
+
+function isProbablyText(buf) {
+  if (!buf || buf.length === 0) return true;
+
+  // UTF-16 BOM допускается, но дальше не должно быть null-байтов в характерных местах.
+  if (startsWith(buf, [0xFF, 0xFE]) || startsWith(buf, [0xFE, 0xFF])) return true;
+
+  // UTF-8 BOM.
+  if (startsWith(buf, [0xEF, 0xBB, 0xBF])) return true;
+
+  // Обычный текст: запрещаем null-байты, как признак бинарного файла.
+  return buf.indexOf(0x00) === -1;
+}
+
+async function verifyMagic(filePath, extRaw) {
+  const ext = String(extRaw || '').toLowerCase();
+  if (!ALLOWED_EXT.has(ext)) return false;
+
+  let head;
+  try {
+    head = await readHead(filePath, 1024);
+  } catch (e) {
+    return false;
+  }
+
+  switch (ext) {
+    case '.pdf':
+      return startsWith(head, [0x25, 0x50, 0x44, 0x46]); // %PDF
+
+    case '.png':
+      return startsWith(head, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+    case '.jpg':
+    case '.jpeg':
+      return startsWith(head, [0xFF, 0xD8, 0xFF]);
+
+    case '.docx':
+    case '.xlsx':
+      // ZIP-контейнер: PK\x03\x04 или пустой ZIP PK\x05\x06
+      return head.length >= 4 &&
+        head[0] === 0x50 &&
+        head[1] === 0x4B &&
+        ((head[2] === 0x03 && head[3] === 0x04) || (head[2] === 0x05 && head[3] === 0x06));
+
+    case '.txt':
+    case '.csv':
+    case '.md':
+      return isProbablyText(head);
+
+    default:
+      return false;
+  }
+}
+
+module.exports = {
+  upload,
+  UPLOAD_DIR,
+  MAX_FILES,
+  MAX_FILE_SIZE,
+  ALLOWED_EXT,
+  verifyMagic,
+  decodeName
+};
