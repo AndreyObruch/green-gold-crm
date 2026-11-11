@@ -8,6 +8,15 @@ const audit = require('../middleware/audit');
 const up = require('../middleware/upload');
 const router = express.Router();
 
+function decodeName(name) {
+  if (!name) return name;
+  try {
+    const fixed = Buffer.from(name, 'latin1').toString('utf8');
+    if (fixed.indexOf('\uFFFD') !== -1) return name;
+    return fixed;
+  } catch (e) { return name; }
+}
+
 function getTask(id, cb) {
   db.get('SELECT id, assignee_id, deleted FROM tasks WHERE id = ?', [id], (e, r) => cb(e ? null : r));
 }
@@ -33,7 +42,7 @@ router.post('/', auth, (req, res) => {
     const cleanup = () => { files.forEach((f) => { fs.unlink(f.path, () => {}); }); };
 
     for (const f of files) {
-      const ext = path.extname(f.originalname || '').toLowerCase();
+      const ext = path.extname(decodeName(f.originalname) || '').toLowerCase();
       const ok = await up.verifyMagic(f.path, ext);
       if (!ok) { cleanup(); return res.status(400).json({ error: 'File content does not match extension' }); }
     }
@@ -55,13 +64,14 @@ router.post('/', auth, (req, res) => {
     for (const f of files) {
       const buf = await fs.promises.readFile(f.path);
       const sha = crypto.createHash('sha256').update(buf).digest('hex');
+      const realName = decodeName(f.originalname);
       const id = await new Promise((resolve) => {
         db.run('INSERT INTO files (task_id, uploader_id, original_name, stored_name, mime, size, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [taskId, req.user.id, f.originalname, f.filename, f.mimetype, f.size, sha],
+          [taskId, req.user.id, realName, f.filename, f.mimetype, f.size, sha],
           function (e) { resolve(e ? null : this.lastID); });
       });
       if (id === null) { cleanup(); return res.status(500).json({ error: 'DB insert failed' }); }
-      inserted.push({ id: id, name: f.originalname, size: f.size });
+      inserted.push({ id: id, name: realName, size: f.size });
     }
     audit(req.user.id, req.user.username, 'file_upload', 'file', inserted[0].id, 'count=' + inserted.length + ' task=' + (taskId || '-'));
     res.json({ files: inserted });
