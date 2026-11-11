@@ -82,6 +82,7 @@ function logout() {
   localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
   token = null; role = null; me = null;
   allTasks = []; usersCache = []; selected.clear();
+  toggleRules(false);
   showLogin();
 }
 
@@ -127,7 +128,7 @@ function injectSaveViewBtn() {
   const row = viewsRow(); if (!row) return;
   if (!document.getElementById('save-view')) {
     const b = document.createElement('button');
-    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '＋ Сохранить вид';
+    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '\uFF0B \u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0432\u0438\u0434';
     row.appendChild(b);
   }
 }
@@ -138,7 +139,7 @@ function renderCustomViews() {
   customViews.forEach((v, i) => {
     const b = document.createElement('button');
     b.className = 'view-chip'; b.dataset.cview = i;
-    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">×</span>';
+    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0432\u0438\u0434">\u00D7</span>';
     row.insertBefore(b, saveBtn);
   });
 }
@@ -177,34 +178,34 @@ function renderCounters(tasks) {
   tasks.forEach(t => { if (c[t.status] !== undefined) c[t.status]++; });
   const el = document.getElementById('counters');
   if (el) el.innerHTML =
-    '<span class="view-chip st-new">Новые: ' + c.new + '</span>' +
-    '<span class="view-chip st-prog">В работе: ' + c.in_progress + '</span>' +
-    '<span class="view-chip st-done">Готово: ' + c.done + '</span>';
+    '<span class="view-chip st-new">\u041D\u043E\u0432\u044B\u0435: ' + c.new + '</span>' +
+    '<span class="view-chip st-prog">\u0412 \u0440\u0430\u0431\u043E\u0442\u0435: ' + c.in_progress + '</span>' +
+    '<span class="view-chip st-done">\u0413\u043E\u0442\u043E\u0432\u043E: ' + c.done + '</span>';
 }
 
 function renderTasks() {
   const list = document.getElementById('task-list');
   const view = applyView(allTasks);
   renderCounters(allTasks);
-  if (view.length === 0) { list.innerHTML = '<li class="empty-state">Нет задач под текущий фильтр</li>'; updateBulkBar(); return; }
+  if (view.length === 0) { list.innerHTML = '<li class="empty-state">\u041D\u0435\u0442 \u0437\u0430\u0434\u0430\u0447 \u043F\u043E\u0434 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0444\u0438\u043B\u044C\u0442\u0440</li>'; updateBulkBar(); return; }
   const manual = sortBy === 'manual';
   list.innerHTML = view.map(t => {
     const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
     const chk = role === 'admin' ? '<input type="checkbox" class="task-check" data-id="' + t.id + '"' + (selected.has(t.id) ? ' checked' : '') + '>' : '';
     const head = '<div class="task-head">' + chk + '<b class="task-title-text" data-act="open" data-id="' + t.id + '" style="cursor:pointer">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
     const desc = (t.description && String(t.description).trim()) ? '<div class="task-desc">' + escapeHtml(String(t.description)).replace(/\n/g, '<br>') + '</div>' : '';
-    const mp = ['Исполнитель: ' + escapeHtml(t.assignee_username || '—')];
-    if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
+    const mp = ['\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014')];
+    if (t.creator_username) mp.push('\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username));
     const d = fmtDate(t.created_at); if (d) mp.push(d);
-    const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
+    const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
     const filesBox = '<div class="task-actions" id="files-' + t.id + '"></div>';
     let acts = '<div class="task-actions">';
     ['new', 'in_progress', 'done'].forEach(s => {
       acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
     });
     if (role === 'admin') {
-      acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">Правка</button> ';
-      acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">Удалить</button>';
+      acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">\u041F\u0440\u0430\u0432\u043A\u0430</button> ';
+      acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043B\u0438\u0442\u044C</button>';
     }
     acts += '</div>';
     return '<li class="task-card' + (selected.has(t.id) ? ' selected' : '') + '" data-task="' + t.id + '"' + (manual ? ' draggable="true"' : '') + '>' + head + desc + meta + filesBox + acts + '</li>';
@@ -232,7 +233,7 @@ async function attachFiles(tasks) {
       const fs = await r.json();
       if (!Array.isArray(fs) || fs.length === 0) { box.remove(); return; }
       box.innerHTML = fs.map(f =>
-        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
+        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
       ).join('');
     } catch (e) { box.remove(); }
   }));
@@ -247,11 +248,11 @@ async function loadArchive() {
     list.innerHTML = tasks.map(t => {
       const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
       const head = '<div class="task-head"><b class="task-title-text">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
-      const mp = ['Исполнитель: ' + escapeHtml(t.assignee_username || '—')];
-      if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
+      const mp = ['\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014')];
+      if (t.creator_username) mp.push('\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username));
       const d = fmtDate(t.created_at); if (d) mp.push(d);
-      const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
-      const acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">Восстановить</button></div>';
+      const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
+      const acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C</button></div>';
       return '<li class="task-card">' + head + meta + acts + '</li>';
     }).join('');
   } catch (e) { console.error('loadArchive', e); }
@@ -277,9 +278,9 @@ async function createTask() {
   const assigneeId = assigneeRaw ? parseInt(assigneeRaw, 10) : null;
   const fileInput = document.getElementById('task-files');
   const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
-  if (sel.length > 3) { alert('Максимум 3 файла'); return; }
-  for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
-  if (!title.trim()) { alert('Название обязательно'); return; }
+  if (sel.length > 3) { alert('\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 3 \u0444\u0430\u0439\u043B\u0430'); return; }
+  for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('\u0424\u0430\u0439\u043B > 10 \u041C\u0411: ' + f.name); return; } }
+  if (!title.trim()) { alert('\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E'); return; }
   const tempId = -Date.now();
   const au = usersCache.find(u => u.id === assigneeId);
   allTasks.unshift({
@@ -308,12 +309,12 @@ async function createTask() {
       const ur = await fetch(API + '/files', { method: 'POST', body: fd });
       if (!ur.ok) {
         const ud = await ur.json().catch(() => ({}));
-        alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
+        alert('\u0417\u0430\u0434\u0430\u0447\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0430, \u043D\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C: ' + (ud.error || ''));
       }
       fileInput.value = '';
     }
     renderTasks();
-    showToast('Задача создана');
+    showToast('\u0417\u0430\u0434\u0430\u0447\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0430');
   } catch (e) {
     allTasks = allTasks.filter(t => t.id !== tempId); renderTasks(); console.error('createTask', e);
   }
@@ -327,26 +328,26 @@ function openDrawer(id) {
   let edit = '';
   if (role === 'admin') {
     const opts = usersCache.map(u => '<option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + escapeHtml(u.username) + '</option>').join('');
-    edit = '<div class="field"><label for="edit-title">Название</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
-      '<div class="field"><label for="edit-desc">Описание</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
-      '<div class="form-row"><div class="field"><label for="edit-assignee">Исполнитель</label><select id="edit-assignee"><option value="">—</option>' + opts + '</select></div>' +
-      '<div class="field"><label for="edit-status">Статус</label><select id="edit-status">' +
+    edit = '<div class="field"><label for="edit-title">\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
+      '<div class="field"><label for="edit-desc">\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
+      '<div class="form-row"><div class="field"><label for="edit-assignee">\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C</label><select id="edit-assignee"><option value="">\u2014</option>' + opts + '</select></div>' +
+      '<div class="field"><label for="edit-status">\u0421\u0442\u0430\u0442\u0443\u0441</label><select id="edit-status">' +
       ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
       '</select></div></div>' +
-      '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">Сохранить</button>';
+      '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button>';
   }
   document.getElementById('drawer-body').innerHTML =
     '<h3>' + escapeHtml(t.title) + '</h3>' +
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
-    '<p class="task-desc">' + escapeHtml(t.description || '—') + '</p>' +
-    '<div class="task-meta"><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '<br>Создал: ' + escapeHtml(t.creator_username || '—') + '<br>' + fmtDate(t.created_at) + '</small></div>' +
+    '<p class="task-desc">' + escapeHtml(t.description || '\u2014') + '</p>' +
+    '<div class="task-meta"><small>\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014') + '<br>\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) + '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' + edit;
   dr.classList.add('open'); ov.classList.add('open');
   fetch(API + '/files?task_id=' + id).then(r => r.json()).then(fs => {
     const box = document.getElementById('drawer-files');
     if (!box) return;
-    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
-    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + '</button>').join('');
+    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">\u0412\u043B\u043E\u0436\u0435\u043D\u0438\u0439 \u043D\u0435\u0442</span>'; return; }
+    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + '</button>').join('');
   }).catch(() => { });
 }
 function closeDrawer() {
@@ -377,7 +378,7 @@ async function saveEdit(id) {
       Object.assign(t, old); renderTasks();
       const d = await r.json(); alert(d.error); return;
     }
-    showToast('Сохранено');
+    showToast('\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E');
   } catch (e) { Object.assign(t, old); renderTasks(); console.error('saveEdit', e); }
 }
 
@@ -398,7 +399,7 @@ function updateBulkBar() {
   if (!bar) return;
   if (selected.size === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
-  document.getElementById('bulk-count').textContent = 'Выбрано: ' + selected.size;
+  document.getElementById('bulk-count').textContent = '\u0412\u044B\u0431\u0440\u0430\u043D\u043E: ' + selected.size;
 }
 
 async function deleteTasks(ids) {
@@ -406,7 +407,7 @@ async function deleteTasks(ids) {
   ids.forEach(id => selected.delete(id));
   renderTasks();
   for (const id of ids) { await fetch(API + '/tasks/' + id, { method: 'DELETE' }); }
-  showToast('Удалено: ' + ids.length, async () => {
+  showToast('\u0423\u0434\u0430\u043B\u0435\u043D\u043E: ' + ids.length, async () => {
     for (const id of ids) { await fetch(API + '/tasks/' + id + '/restore', { method: 'POST' }); }
     loadTasks();
   });
@@ -420,6 +421,13 @@ function getDragAfterElement(container, y) {
     if (offset < 0 && offset > closest.offset) return { offset, element: child };
     return closest;
   }, { offset: -Infinity, element: null }).element;
+}
+
+function toggleRules(force) {
+  const drop = document.getElementById('rules-drop');
+  if (!drop) return;
+  const open = typeof force === 'boolean' ? force : !drop.classList.contains('open');
+  drop.classList.toggle('open', open);
 }
 
 document.querySelector('.main-nav').addEventListener('click', e => {
@@ -446,7 +454,7 @@ taskList.addEventListener('click', async e => {
         body: JSON.stringify({ status: btn.dataset.val })
       });
       if (!r.ok) { if (t) t.status = old; renderTasks(); const d = await r.json(); alert(d.error); return; }
-      showToast('Статус обновлён');
+      showToast('\u0421\u0442\u0430\u0442\u0443\u0441 \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D');
     } else if (act === 'delete') {
       await deleteTasks([id]);
     }
@@ -512,7 +520,7 @@ viewsRow().addEventListener('click', e => {
   const pv = e.target.closest('[data-view]');
   if (pv) { currentView = pv.dataset.view; persistUI(); syncViewChips(); renderTasks(); return; }
   if (e.target.closest('#save-view')) {
-    const name = prompt('Название вида:');
+    const name = prompt('\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0432\u0438\u0434\u0430:');
     if (!name) return;
     customViews.push({ name, view: currentView, search: searchTerm, filter: filterStatus, sort: sortBy });
     localStorage.setItem('gg_views', JSON.stringify(customViews));
@@ -532,6 +540,19 @@ document.getElementById('drawer').addEventListener('click', e => {
   if (dl) { downloadFile(dl.dataset.id, dl.dataset.name); return; }
   const sv = e.target.closest('button[data-act="save-edit"]');
   if (sv) saveEdit(parseInt(sv.dataset.id, 10));
+});
+
+document.getElementById('rules-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  toggleRules();
+});
+document.getElementById('rules-drop').addEventListener('click', e => { e.stopPropagation(); });
+document.addEventListener('click', e => {
+  const drop = document.getElementById('rules-drop');
+  if (drop.classList.contains('open') && !drop.contains(e.target)) toggleRules(false);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { toggleRules(false); closeDrawer(); }
 });
 
 localStorage.removeItem('token');
