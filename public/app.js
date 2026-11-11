@@ -4,14 +4,22 @@ let allTasks = [], usersCache = [], selected = new Set();
 let orderIds = [], customViews = [];
 let currentView = 'all', searchTerm = '', filterStatus = 'all', sortBy = 'date_desc';
 let dragId = null;
+let chatTimer = null, chatTaskId = null;
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function statusClass(s) { return ({ 'new': 'st-new', 'in_progress': 'st-prog', 'done': 'st-done' })[s] || 'st-other'; }
-function statusLabel(s) { return ({ 'new': 'Новая', 'in_progress': 'В работе', 'done': 'Готово' })[s] || escapeHtml(s); }
+function statusLabel(s) { return ({ 'new': '\u041D\u043E\u0432\u0430\u044F', 'in_progress': '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', 'done': '\u0413\u043E\u0442\u043E\u0432\u043E' })[s] || escapeHtml(s); }
 function fmtDate(s) { if (!s) return ''; return String(s).slice(0, 16).replace('T', ' '); }
+function getUserId() {
+  try {
+    const t = localStorage.getItem('token');
+    if (!t) return null;
+    return JSON.parse(atob(t.split('.')[1])).id;
+  } catch (e) { return null; }
+}
 
 const _rawFetch = window.fetch.bind(window);
 window.fetch = async function(url, opts) {
@@ -79,6 +87,7 @@ async function login() {
 }
 
 function logout() {
+  stopPolling();
   localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
   token = null; role = null; me = null;
   allTasks = []; usersCache = []; selected.clear();
@@ -113,7 +122,7 @@ function restoreUI() {
   } catch (e) { }
   const sb = document.getElementById('sort-by');
   if (sb && ![...sb.options].some(o => o.value === 'manual')) {
-    const o = document.createElement('option'); o.value = 'manual'; o.textContent = 'Вручную (перетаскивание)'; sb.appendChild(o);
+    const o = document.createElement('option'); o.value = 'manual'; o.textContent = '\u0412\u0440\u0443\u0447\u043D\u0443\u044E (\u043F\u0435\u0440\u0435\u0442\u0430\u0441\u043A\u0438\u0432\u0430\u043D\u0438\u0435)'; sb.appendChild(o);
   }
   if (sb) sb.value = sortBy;
   const fs = document.getElementById('filter-status'); if (fs) fs.value = filterStatus;
@@ -341,7 +350,11 @@ function openDrawer(id) {
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
     '<p class="task-desc">' + escapeHtml(t.description || '\u2014') + '</p>' +
     '<div class="task-meta"><small>\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014') + '<br>\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) + '</small></div>' +
-    '<div class="task-actions" id="drawer-files"></div>' + edit;
+    '<div class="task-actions" id="drawer-files"></div>' +
+    '<div class="chat-section"><h4>\u0427\u0430\u0442 \u0437\u0430\u0434\u0430\u0447\u0438</h4><div class="chat-box" id="chat-box"></div>' +
+    '<div class="chat-form"><textarea id="chat-body" placeholder="\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435..."></textarea>' +
+    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">\uD83D\uDCCE \u0424\u0430\u0439\u043B</button>' +
+    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C</button></div></div></div>' + edit;
   dr.classList.add('open'); ov.classList.add('open');
   fetch(API + '/files?task_id=' + id).then(r => r.json()).then(fs => {
     const box = document.getElementById('drawer-files');
@@ -349,10 +362,86 @@ function openDrawer(id) {
     if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">\u0412\u043B\u043E\u0436\u0435\u043D\u0438\u0439 \u043D\u0435\u0442</span>'; return; }
     box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + '</button>').join('');
   }).catch(() => { });
+  startPolling(id);
 }
 function closeDrawer() {
+  stopPolling();
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+function startPolling(taskId) {
+  stopPolling();
+  chatTaskId = taskId;
+  loadChat(taskId);
+  chatTimer = setInterval(() => {
+    if (document.getElementById('drawer').classList.contains('open')) loadChat(taskId);
+    else stopPolling();
+  }, 4000);
+}
+function stopPolling() {
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+  chatTaskId = null;
+}
+
+async function loadChat(taskId) {
+  const box = document.getElementById('chat-box');
+  if (!box) return;
+  try {
+    const r = await fetch(API + '/messages?task_id=' + taskId);
+    if (!r.ok) return;
+    const msgs = await r.json();
+    const uid = getUserId();
+    box.innerHTML = (Array.isArray(msgs) ? msgs : []).map(m => {
+      const mine = m.user_id === uid ? ' mine' : '';
+      const body = m.body ? '<div class="chat-body">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>' : '';
+      const file = m.file_id ? '<div class="task-actions"><button class="chip" data-act="download" data-id="' + m.file_id + '" data-name="' + escapeHtml(m.file_name || 'file') + '">\uD83D\uDCCE ' + escapeHtml(m.file_name || 'file') + ' (' + Math.max(1, Math.round((m.file_size || 0) / 1024)) + ' KB)</button></div>' : '';
+      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b><small>' + fmtDate(m.created_at) + '</small></div>' + body + file + '</div>';
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  } catch (e) { console.error('loadChat', e); }
+}
+
+async function postMessage(taskId, body, fileId) {
+  try {
+    const payload = { task_id: taskId };
+    if (body) payload.body = body;
+    if (fileId) payload.file_id = fileId;
+    const r = await fetch(API + '/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || '\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C'); return false; }
+    return true;
+  } catch (e) { console.error('postMessage', e); return false; }
+}
+
+async function sendChat(taskId) {
+  const ta = document.getElementById('chat-body');
+  const body = ta ? ta.value.trim() : '';
+  if (!body) { alert('\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435'); return; }
+  const ok = await postMessage(taskId, body, null);
+  if (ok) { ta.value = ''; loadChat(taskId); }
+}
+
+function attachChatFile(taskId) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt';
+  inp.onchange = async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { alert('\u0424\u0430\u0439\u043B > 10 \u041C\u0411'); return; }
+    const fd = new FormData();
+    fd.append('files', f);
+    fd.append('task_id', String(taskId));
+    const r = await fetch(API + '/files', { method: 'POST', body: fd });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || '\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C'); return; }
+    const data = await r.json();
+    const fid = data.files[0].id;
+    const ta = document.getElementById('chat-body');
+    const body = ta ? ta.value.trim() : null;
+    const ok = await postMessage(taskId, body || null, fid);
+    if (ok) { if (ta) ta.value = ''; loadChat(taskId); }
+  };
+  inp.click();
 }
 
 async function saveEdit(id) {
@@ -538,6 +627,10 @@ document.getElementById('drawer-overlay').addEventListener('click', closeDrawer)
 document.getElementById('drawer').addEventListener('click', e => {
   const dl = e.target.closest('button[data-act="download"]');
   if (dl) { downloadFile(dl.dataset.id, dl.dataset.name); return; }
+  const ac = e.target.closest('[data-act="attach-chat"]');
+  if (ac) { attachChatFile(parseInt(ac.dataset.id, 10)); return; }
+  const cs = e.target.closest('#chat-send');
+  if (cs) { sendChat(parseInt(cs.dataset.id, 10)); return; }
   const sv = e.target.closest('button[data-act="save-edit"]');
   if (sv) saveEdit(parseInt(sv.dataset.id, 10));
 });
