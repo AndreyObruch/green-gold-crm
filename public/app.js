@@ -1,13 +1,9 @@
 const API = '/api';
-let token = null;
-let role = null;
-let allTasks = [];
-let selected = new Set();
-let undoStack = [];
-let currentView = 'all';
-let searchTerm = '';
-let filterStatus = 'all';
-let sortBy = 'date_desc';
+let token = null, role = null, me = null;
+let allTasks = [], usersCache = [], selected = new Set();
+let orderIds = [], customViews = [];
+let currentView = 'all', searchTerm = '', filterStatus = 'all', sortBy = 'date_desc';
+let dragId = null;
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -51,12 +47,15 @@ function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
 }
+
 function showDashboard() {
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   const isAdmin = role === 'admin';
   document.getElementById('nav-create').style.display = isAdmin ? '' : 'none';
   document.getElementById('nav-archive').style.display = isAdmin ? '' : 'none';
+  restoreUI();
+  loadUsers();
   switchTab('tasks');
 }
 
@@ -70,15 +69,19 @@ async function login() {
     });
     const data = await res.json();
     if (res.ok) {
-      token = data.token; role = data.role;
-      localStorage.setItem('token', token); localStorage.setItem('role', role);
+      token = data.token; role = data.role; me = username;
+      localStorage.setItem('token', token);
+      localStorage.setItem('role', role);
+      localStorage.setItem('username', me);
       showDashboard();
     } else { alert(data.error); }
   } catch (e) { alert('Server unavailable'); }
 }
+
 function logout() {
-  localStorage.clear(); token = null; role = null;
-  allTasks = []; selected.clear(); undoStack = [];
+  localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
+  token = null; role = null; me = null;
+  allTasks = []; usersCache = []; selected.clear();
   showLogin();
 }
 
@@ -86,10 +89,10 @@ async function loadUsers() {
   try {
     const res = await fetch(API + '/users');
     const users = await res.json();
+    usersCache = Array.isArray(users) ? users : [];
     const sel = document.getElementById('task-assignee');
     sel.innerHTML = '';
-    if (!Array.isArray(users)) return;
-    users.forEach(u => {
+    usersCache.forEach(u => {
       const opt = document.createElement('option');
       opt.value = u.id; opt.textContent = u.username + ' (' + u.role + ')';
       sel.appendChild(opt);
@@ -97,15 +100,71 @@ async function loadUsers() {
   } catch (e) { console.error('loadUsers', e); }
 }
 
+function persistUI() {
+  localStorage.setItem('gg_ui', JSON.stringify({ view: currentView, search: searchTerm, filter: filterStatus, sort: sortBy }));
+}
+function restoreUI() {
+  try {
+    orderIds = JSON.parse(localStorage.getItem('gg_order') || '[]');
+    customViews = JSON.parse(localStorage.getItem('gg_views') || '[]');
+    const ui = JSON.parse(localStorage.getItem('gg_ui') || 'null');
+    if (ui) { currentView = ui.view || 'all'; searchTerm = ui.search || ''; filterStatus = ui.filter || 'all'; sortBy = ui.sort || 'date_desc'; }
+  } catch (e) { }
+  const sb = document.getElementById('sort-by');
+  if (sb && ![...sb.options].some(o => o.value === 'manual')) {
+    const o = document.createElement('option'); o.value = 'manual'; o.textContent = 'Вручную (перетаскивание)'; sb.appendChild(o);
+  }
+  if (sb) sb.value = sortBy;
+  const fs = document.getElementById('filter-status'); if (fs) fs.value = filterStatus;
+  const si = document.getElementById('search-input'); if (si) si.value = searchTerm;
+  injectSaveViewBtn();
+  renderCustomViews();
+  syncViewChips();
+}
+
+function viewsRow() { return document.querySelector('.saved-views:not(#counters)'); }
+function injectSaveViewBtn() {
+  const row = viewsRow(); if (!row) return;
+  if (!document.getElementById('save-view')) {
+    const b = document.createElement('button');
+    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '＋ Сохранить вид';
+    row.appendChild(b);
+  }
+}
+function renderCustomViews() {
+  const row = viewsRow(); if (!row) return;
+  row.querySelectorAll('[data-cview]').forEach(el => el.remove());
+  const saveBtn = document.getElementById('save-view');
+  customViews.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.className = 'view-chip'; b.dataset.cview = i;
+    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">×</span>';
+    row.insertBefore(b, saveBtn);
+  });
+}
+function syncViewChips() {
+  document.querySelectorAll('.view-chip[data-view]').forEach(c => c.classList.toggle('active', c.dataset.view === currentView && !currentView.startsWith('cv:')));
+  document.querySelectorAll('.view-chip[data-cview]').forEach(c => c.classList.toggle('active', currentView === 'cv:' + c.dataset.cview));
+}
+function applyNamedView(v) {
+  searchTerm = v.search || ''; filterStatus = v.filter || 'all'; sortBy = v.sort || 'date_desc'; currentView = v.view || 'all';
+  const si = document.getElementById('search-input'); if (si) si.value = searchTerm;
+  const fs = document.getElementById('filter-status'); if (fs) fs.value = filterStatus;
+  const sb = document.getElementById('sort-by'); if (sb) sb.value = sortBy;
+  persistUI(); syncViewChips(); renderTasks();
+}
+
 function applyView(tasks) {
   let out = tasks.slice();
-  if (currentView === 'mine') out = out.filter(t => t.assignee_username === localStorage.getItem('username'));
+  if (currentView === 'mine') out = out.filter(t => t.assignee_username === me);
   if (currentView === 'active') out = out.filter(t => t.status !== 'done');
   if (filterStatus !== 'all') out = out.filter(t => t.status === filterStatus);
   if (searchTerm) {
     const q = searchTerm.toLowerCase();
     out = out.filter(t => (t.title || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.assignee_username || '').toLowerCase().includes(q));
   }
+  const idx = id => { const p = orderIds.indexOf(id); return p === -1 ? 999999 : p; };
+  if (sortBy === 'manual') out.sort((a, b) => idx(a.id) - idx(b.id));
   if (sortBy === 'date_desc') out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   if (sortBy === 'date_asc') out.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
   if (sortBy === 'title') out.sort((a, b) => String(a.title).localeCompare(String(b.title), 'ru'));
@@ -127,10 +186,8 @@ function renderTasks() {
   const list = document.getElementById('task-list');
   const view = applyView(allTasks);
   renderCounters(allTasks);
-  if (view.length === 0) {
-    list.innerHTML = '<li class="empty-state">Нет задач под текущий фильтр</li>';
-    return;
-  }
+  if (view.length === 0) { list.innerHTML = '<li class="empty-state">Нет задач под текущий фильтр</li>'; updateBulkBar(); return; }
+  const manual = sortBy === 'manual';
   list.innerHTML = view.map(t => {
     const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
     const chk = role === 'admin' ? '<input type="checkbox" class="task-check" data-id="' + t.id + '"' + (selected.has(t.id) ? ' checked' : '') + '>' : '';
@@ -145,9 +202,12 @@ function renderTasks() {
     ['new', 'in_progress', 'done'].forEach(s => {
       acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
     });
-    if (role === 'admin') acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">Удалить</button>';
+    if (role === 'admin') {
+      acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">Правка</button> ';
+      acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">Удалить</button>';
+    }
     acts += '</div>';
-    return '<li class="task-card' + (selected.has(t.id) ? ' selected' : '') + '" data-task="' + t.id + '">' + head + desc + meta + filesBox + acts + '</li>';
+    return '<li class="task-card' + (selected.has(t.id) ? ' selected' : '') + '" data-task="' + t.id + '"' + (manual ? ' draggable="true"' : '') + '>' + head + desc + meta + filesBox + acts + '</li>';
   }).join('');
   attachFiles(view);
   updateBulkBar();
@@ -219,29 +279,44 @@ async function createTask() {
   const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
   if (sel.length > 3) { alert('Максимум 3 файла'); return; }
   for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
+  if (!title.trim()) { alert('Название обязательно'); return; }
+  const tempId = -Date.now();
+  const au = usersCache.find(u => u.id === assigneeId);
+  allTasks.unshift({
+    id: tempId, title: title, description: description, status: 'new',
+    assignee_id: assigneeId, assignee_username: au ? au.username : null,
+    creator_username: me, created_at: new Date().toISOString()
+  });
+  document.getElementById('task-title').value = '';
+  document.getElementById('task-desc').value = '';
+  switchTab('tasks');
   try {
     const res = await fetch(API + '/tasks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, description, assignee_id: assigneeId })
     });
     const data = await res.json();
-    if (res.ok) {
-      document.getElementById('task-title').value = '';
-      document.getElementById('task-desc').value = '';
-      if (sel.length) {
-        const fd = new FormData();
-        sel.forEach(f => fd.append('files', f));
-        fd.append('task_id', String(data.id));
-        const ur = await fetch(API + '/files', { method: 'POST', body: fd });
-        if (!ur.ok) {
-          const ud = await ur.json().catch(() => ({}));
-          alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
-        }
-        fileInput.value = '';
+    if (!res.ok) {
+      allTasks = allTasks.filter(t => t.id !== tempId); renderTasks(); alert(data.error); return;
+    }
+    const t = allTasks.find(x => x.id === tempId);
+    if (t) t.id = data.id;
+    if (sel.length) {
+      const fd = new FormData();
+      sel.forEach(f => fd.append('files', f));
+      fd.append('task_id', String(data.id));
+      const ur = await fetch(API + '/files', { method: 'POST', body: fd });
+      if (!ur.ok) {
+        const ud = await ur.json().catch(() => ({}));
+        alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
       }
-      switchTab('tasks');
-    } else { alert(data.error); }
-  } catch (e) { console.error('createTask', e); }
+      fileInput.value = '';
+    }
+    renderTasks();
+    showToast('Задача создана');
+  } catch (e) {
+    allTasks = allTasks.filter(t => t.id !== tempId); renderTasks(); console.error('createTask', e);
+  }
 }
 
 function openDrawer(id) {
@@ -249,33 +324,69 @@ function openDrawer(id) {
   if (!t) return;
   const dr = document.getElementById('drawer');
   const ov = document.getElementById('drawer-overlay');
+  let edit = '';
+  if (role === 'admin') {
+    const opts = usersCache.map(u => '<option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + escapeHtml(u.username) + '</option>').join('');
+    edit = '<div class="field"><label for="edit-title">Название</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
+      '<div class="field"><label for="edit-desc">Описание</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
+      '<div class="form-row"><div class="field"><label for="edit-assignee">Исполнитель</label><select id="edit-assignee"><option value="">—</option>' + opts + '</select></div>' +
+      '<div class="field"><label for="edit-status">Статус</label><select id="edit-status">' +
+      ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
+      '</select></div></div>' +
+      '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">Сохранить</button>';
+  }
   document.getElementById('drawer-body').innerHTML =
     '<h3>' + escapeHtml(t.title) + '</h3>' +
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
     '<p class="task-desc">' + escapeHtml(t.description || '—') + '</p>' +
     '<div class="task-meta"><small>Исполнитель: ' + escapeHtml(t.assignee_username || '—') + '<br>Создал: ' + escapeHtml(t.creator_username || '—') + '<br>' + fmtDate(t.created_at) + '</small></div>' +
-    '<div class="task-actions" id="drawer-files"></div>';
+    '<div class="task-actions" id="drawer-files"></div>' + edit;
   dr.classList.add('open'); ov.classList.add('open');
   fetch(API + '/files?task_id=' + id).then(r => r.json()).then(fs => {
     const box = document.getElementById('drawer-files');
     if (!box) return;
     if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
     box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + '</button>').join('');
-  }).catch(() => {});
+  }).catch(() => { });
 }
 function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
 }
 
+async function saveEdit(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  const payload = {
+    title: document.getElementById('edit-title').value,
+    description: document.getElementById('edit-desc').value,
+    status: document.getElementById('edit-status').value,
+    assignee_id: document.getElementById('edit-assignee').value || null
+  };
+  const old = { title: t.title, description: t.description, status: t.status, assignee_id: t.assignee_id, assignee_username: t.assignee_username };
+  Object.assign(t, { title: payload.title, description: payload.description, status: payload.status, assignee_id: payload.assignee_id });
+  const au = usersCache.find(u => u.id === payload.assignee_id);
+  t.assignee_username = au ? au.username : null;
+  renderTasks(); closeDrawer();
+  try {
+    const r = await fetch(API + '/tasks/' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) {
+      Object.assign(t, old); renderTasks();
+      const d = await r.json(); alert(d.error); return;
+    }
+    showToast('Сохранено');
+  } catch (e) { Object.assign(t, old); renderTasks(); console.error('saveEdit', e); }
+}
+
 function showToast(msg, undoFn) {
   const toast = document.getElementById('toast');
   document.getElementById('toast-msg').textContent = msg;
   const btn = document.getElementById('toast-undo');
-  if (undoFn) {
-    btn.style.display = '';
-    btn.onclick = () => { undoFn(); hideToast(); };
-  } else { btn.style.display = 'none'; btn.onclick = null; }
+  if (undoFn) { btn.style.display = ''; btn.onclick = () => { undoFn(); hideToast(); }; }
+  else { btn.style.display = 'none'; btn.onclick = null; }
   toast.classList.add('show');
   clearTimeout(showToast._t);
   showToast._t = setTimeout(hideToast, 6000);
@@ -291,7 +402,6 @@ function updateBulkBar() {
 }
 
 async function deleteTasks(ids) {
-  const removed = allTasks.filter(t => ids.includes(t.id));
   allTasks = allTasks.filter(t => !ids.includes(t.id));
   ids.forEach(id => selected.delete(id));
   renderTasks();
@@ -302,18 +412,30 @@ async function deleteTasks(ids) {
   });
 }
 
+function getDragAfterElement(container, y) {
+  const els = [...container.querySelectorAll('li.task-card:not(.dragging)')];
+  return els.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: -Infinity, element: null }).element;
+}
+
 document.querySelector('.main-nav').addEventListener('click', e => {
   const btn = e.target.closest('.nav-btn');
   if (btn) switchTab(btn.dataset.tab);
 });
 
-document.getElementById('task-list').addEventListener('click', async e => {
+const taskList = document.getElementById('task-list');
+taskList.addEventListener('click', async e => {
   const btn = e.target.closest('button, .task-title-text');
   if (!btn) return;
   const id = parseInt(btn.dataset.id, 10);
   const act = btn.dataset.act;
   if (act === 'download') { downloadFile(btn.dataset.id, btn.dataset.name); return; }
   if (act === 'open') { openDrawer(id); return; }
+  if (act === 'edit') { openDrawer(id); return; }
   try {
     if (act === 'status') {
       const t = allTasks.find(x => x.id === id);
@@ -331,7 +453,7 @@ document.getElementById('task-list').addEventListener('click', async e => {
   } catch (err) { console.error('action', err); }
 });
 
-document.getElementById('task-list').addEventListener('change', e => {
+taskList.addEventListener('change', e => {
   const chk = e.target.closest('.task-check');
   if (!chk) return;
   const id = parseInt(chk.dataset.id, 10);
@@ -339,6 +461,29 @@ document.getElementById('task-list').addEventListener('change', e => {
   const card = chk.closest('.task-card');
   if (card) card.classList.toggle('selected', chk.checked);
   updateBulkBar();
+});
+
+taskList.addEventListener('dragstart', e => {
+  const li = e.target.closest('li.task-card');
+  if (!li || sortBy !== 'manual') return;
+  dragId = parseInt(li.dataset.task, 10);
+  li.classList.add('dragging');
+  li.style.opacity = '0.5';
+});
+taskList.addEventListener('dragover', e => {
+  if (sortBy !== 'manual') return;
+  e.preventDefault();
+  const dragging = taskList.querySelector('li.dragging');
+  if (!dragging) return;
+  const after = getDragAfterElement(taskList, e.clientY);
+  if (after == null) taskList.appendChild(dragging);
+  else taskList.insertBefore(dragging, after);
+});
+taskList.addEventListener('dragend', e => {
+  const li = e.target.closest('li.task-card');
+  if (li) { li.classList.remove('dragging'); li.style.opacity = ''; }
+  orderIds = [...taskList.querySelectorAll('li.task-card')].map(x => parseInt(x.dataset.task, 10));
+  localStorage.setItem('gg_order', JSON.stringify(orderIds));
 });
 
 document.getElementById('archive-list').addEventListener('click', async e => {
@@ -351,16 +496,30 @@ document.getElementById('archive-list').addEventListener('click', async e => {
   } catch (err) { console.error('restore', err); }
 });
 
-document.getElementById('search-input').addEventListener('input', e => { searchTerm = e.target.value; renderTasks(); });
-document.getElementById('filter-status').addEventListener('change', e => { filterStatus = e.target.value; renderTasks(); });
-document.getElementById('sort-by').addEventListener('change', e => { sortBy = e.target.value; renderTasks(); });
-document.querySelectorAll('.view-chip[data-view]').forEach(ch => {
-  ch.addEventListener('click', () => {
-    currentView = ch.dataset.view;
-    document.querySelectorAll('.view-chip[data-view]').forEach(c => c.classList.toggle('active', c === ch));
-    renderTasks();
-  });
+document.getElementById('search-input').addEventListener('input', e => { searchTerm = e.target.value; persistUI(); renderTasks(); });
+document.getElementById('filter-status').addEventListener('change', e => { filterStatus = e.target.value; persistUI(); renderTasks(); });
+document.getElementById('sort-by').addEventListener('change', e => { sortBy = e.target.value; persistUI(); renderTasks(); });
+
+viewsRow().addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    customViews.splice(parseInt(del.dataset.del, 10), 1);
+    localStorage.setItem('gg_views', JSON.stringify(customViews));
+    renderCustomViews(); syncViewChips(); return;
+  }
+  const cv = e.target.closest('[data-cview]');
+  if (cv) { currentView = 'cv:' + cv.dataset.cview; applyNamedView(customViews[parseInt(cv.dataset.cview, 10)]); return; }
+  const pv = e.target.closest('[data-view]');
+  if (pv) { currentView = pv.dataset.view; persistUI(); syncViewChips(); renderTasks(); return; }
+  if (e.target.closest('#save-view')) {
+    const name = prompt('Название вида:');
+    if (!name) return;
+    customViews.push({ name, view: currentView, search: searchTerm, filter: filterStatus, sort: sortBy });
+    localStorage.setItem('gg_views', JSON.stringify(customViews));
+    renderCustomViews(); syncViewChips();
+  }
 });
+
 document.getElementById('bulk-delete').addEventListener('click', () => {
   if (selected.size === 0) return;
   deleteTasks(Array.from(selected));
@@ -369,11 +528,14 @@ document.getElementById('bulk-clear').addEventListener('click', () => { selected
 document.getElementById('drawer-close').addEventListener('click', closeDrawer);
 document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
 document.getElementById('drawer').addEventListener('click', e => {
-  const btn = e.target.closest('button[data-act="download"]');
-  if (btn) downloadFile(btn.dataset.id, btn.dataset.name);
+  const dl = e.target.closest('button[data-act="download"]');
+  if (dl) { downloadFile(dl.dataset.id, dl.dataset.name); return; }
+  const sv = e.target.closest('button[data-act="save-edit"]');
+  if (sv) saveEdit(parseInt(sv.dataset.id, 10));
 });
 
 localStorage.removeItem('token');
 localStorage.removeItem('role');
-token = null; role = null;
+localStorage.removeItem('username');
+token = null; role = null; me = null;
 showLogin();

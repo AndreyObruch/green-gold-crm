@@ -20,6 +20,8 @@ function updateDetail(body) {
   const parts = [];
   if (body.status) parts.push('status=' + body.status);
   if (body.assignee_id) parts.push('assignee=' + body.assignee_id);
+  if (body.title !== undefined) parts.push('title');
+  if (body.description !== undefined) parts.push('description');
   return parts.join(' ');
 }
 
@@ -92,17 +94,26 @@ function applyPatch(req, res, updates, params) {
 }
 
 router.patch('/:id', auth, (req, res) => {
-  const { status, assignee_id } = req.body;
+  const { status, assignee_id, title, description } = req.body;
   if (status && !ALLOWED_STATUS.includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
+  }
+  if (title !== undefined && !String(title).trim()) {
+    return res.status(400).json({ error: 'Title required' });
+  }
+  if (req.user.role !== 'admin' && (title !== undefined || description !== undefined || assignee_id !== undefined)) {
+    audit(req.user.id, req.user.username, 'task_update_denied', 'task', req.params.id, 'admin_fields');
+    return res.status(403).json({ error: 'Access denied' });
   }
   const updates = [];
   const params = [];
   if (status) { updates.push('status = ?'); params.push(status); }
-  if (assignee_id && req.user.role === 'admin') {
+  if (title !== undefined && req.user.role === 'admin') { updates.push('title = ?'); params.push(String(title).trim()); }
+  if (description !== undefined && req.user.role === 'admin') { updates.push('description = ?'); params.push(description === '' ? null : String(description)); }
+  if (assignee_id !== undefined && req.user.role === 'admin') {
     validAssignee(assignee_id, function(ok) {
       if (!ok) return res.status(400).json({ error: 'Invalid assignee_id' });
-      updates.push('assignee_id = ?'); params.push(parseInt(assignee_id, 10));
+      updates.push('assignee_id = ?'); params.push(assignee_id === '' || assignee_id === null ? null : parseInt(assignee_id, 10));
       applyPatch(req, res, updates, params);
     });
     return;
