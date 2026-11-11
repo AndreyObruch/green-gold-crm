@@ -118,6 +118,21 @@ async function loadUsers() {
   } catch (e) { console.error('loadUsers', e); }
 }
 
+async function attachFiles(tasks) {
+  await Promise.all(tasks.map(async function(t) {
+    const box = document.getElementById('files-' + t.id);
+    if (!box) return;
+    try {
+      const r = await fetch(API + '/files?task_id=' + t.id);
+      const fs = await r.json();
+      if (!Array.isArray(fs) || fs.length === 0) { box.remove(); return; }
+      box.innerHTML = fs.map(function(f) {
+        return '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>';
+      }).join('');
+    } catch (e) { box.remove(); }
+  }));
+}
+
 async function loadTasks() {
   try {
     const res = await fetch(API + '/tasks');
@@ -134,6 +149,7 @@ async function loadTasks() {
       if (t.creator_username) mp.push('\u0421\u043e\u0437\u0434\u0430\u043b: ' + escapeHtml(t.creator_username));
       var d = fmtDate(t.created_at); if (d) mp.push(d);
       var meta = '<div class="task-meta"><small>' + mp.join(' \u00b7 ') + '</small></div>';
+      var filesBox = '<div class="task-actions" id="files-' + t.id + '"></div>';
       var acts = '<div class="task-actions">';
       ['new', 'in_progress', 'done'].forEach(function(s) {
         acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
@@ -142,8 +158,9 @@ async function loadTasks() {
         acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>';
       }
       acts += '</div>';
-      return '<li class="task-card">' + head + desc + meta + acts + '</li>';
+      return '<li class="task-card">' + head + desc + meta + filesBox + acts + '</li>';
     }).join('');
+    attachFiles(tasks);
   } catch (e) { console.error('loadTasks', e); }
 }
 
@@ -166,11 +183,31 @@ async function loadArchive() {
   } catch (e) { console.error('loadArchive', e); }
 }
 
+async function downloadFile(id, name) {
+  try {
+    const r = await fetch(API + '/files/' + id + '/download');
+    if (!r.ok) { const d = await r.json().catch(function() { return {}; }); alert(d.error || 'Download failed'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  } catch (e) { console.error('download', e); }
+}
+
 async function createTask() {
   const title = document.getElementById('task-title').value;
   const description = document.getElementById('task-desc').value;
   const assigneeRaw = document.getElementById('task-assignee').value;
   const assigneeId = assigneeRaw ? parseInt(assigneeRaw, 10) : null;
+  const fileInput = document.getElementById('task-files');
+  const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
+  if (sel.length > 3) { alert('\u041c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 3 \u0444\u0430\u0439\u043b\u0430'); return; }
+  for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('\u0424\u0430\u0439\u043b > 10 \u041c\u0411: ' + f.name); return; } }
   try {
     const res = await fetch(API + '/tasks', {
       method: 'POST',
@@ -181,6 +218,17 @@ async function createTask() {
     if (res.ok) {
       document.getElementById('task-title').value = '';
       document.getElementById('task-desc').value = '';
+      if (sel.length) {
+        const fd = new FormData();
+        sel.forEach(function(f) { fd.append('files', f); });
+        fd.append('task_id', String(data.id));
+        const ur = await fetch(API + '/files', { method: 'POST', body: fd });
+        if (!ur.ok) {
+          const ud = await ur.json().catch(function() { return {}; });
+          alert('\u0417\u0430\u0434\u0430\u0447\u0430 \u0441\u043e\u0437\u0434\u0430\u043d\u0430, \u043d\u043e \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043d\u0435 \u0443\u0434\u0430\u043b\u0430\u0441\u044c: ' + (ud.error || ''));
+        }
+        fileInput.value = '';
+      }
       switchTab('tasks');
     } else {
       alert(data.error);
@@ -198,6 +246,7 @@ document.getElementById('task-list').addEventListener('click', async function(e)
   if (!btn) return;
   const id = btn.dataset.id;
   const act = btn.dataset.act;
+  if (act === 'download') { downloadFile(id, btn.dataset.name); return; }
   try {
     if (act === 'status') {
       const r = await fetch(API + '/tasks/' + id, {
