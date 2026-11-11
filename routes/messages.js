@@ -22,7 +22,7 @@ router.get('/', auth, (req, res) => {
       audit(req.user.id, req.user.username, 'messages_list_denied', 'message', null, 'task_access');
       return res.status(403).json({ error: 'Access denied' });
     }
-    db.all('SELECT m.*, u.username AS author_username FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.task_id = ? ORDER BY m.created_at ASC, m.id ASC', [taskId], (e, rows) => {
+    db.all('SELECT m.*, u.username AS author_username, f.original_name AS file_name, f.size AS file_size, f.mime AS file_mime FROM messages m LEFT JOIN users u ON m.user_id = u.id LEFT JOIN files f ON m.file_id = f.id WHERE m.task_id = ? ORDER BY m.created_at ASC, m.id ASC', [taskId], (e, rows) => {
       if (e) return res.status(500).json({ error: e.message });
       res.json(rows);
     });
