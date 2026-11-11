@@ -54,6 +54,10 @@
                     <label for="task-assignee">Исполнитель</label>
                     <select id="task-assignee"></select>
                 </div>
+                <div class="field">
+                    <label for="task-files">Вложения (до 3 файлов, каждый ≤ 10 МБ)</label>
+                    <input type="file" id="task-files" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt">
+                </div>
                 <button class="btn btn-gold" onclick="createTask()">Создать</button>
             </div>
 
