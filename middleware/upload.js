@@ -77,6 +77,62 @@ function startsWith(buf, sig) {
   return true;
 }
 
+function asciiAt(buf, start, len) {
+  if (!buf || buf.length < start + len) return '';
+  return buf.slice(start, start + len).toString('ascii');
+}
+
+function isJpeg(buf) {
+  return buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xD8;
+}
+
+function isPng(buf) {
+  return startsWith(buf, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+}
+
+function isGif(buf) {
+  return startsWith(buf, [0x47, 0x49, 0x46, 0x38]);
+}
+
+function isWebp(buf) {
+  return asciiAt(buf, 0, 4) === 'RIFF' && asciiAt(buf, 8, 4) === 'WEBP';
+}
+
+function isHeic(buf) {
+  if (buf.length < 12) return false;
+  if (asciiAt(buf, 4, 4) !== 'ftyp') return false;
+  const brand = asciiAt(buf, 8, 4);
+  return [
+    'heic',
+    'heix',
+    'heim',
+    'heis',
+    'hevc',
+    'hevx',
+    'mif1',
+    'msf1'
+  ].indexOf(brand) !== -1;
+}
+
+function isBmp(buf) {
+  return startsWith(buf, [0x42, 0x4D]);
+}
+
+function isTiff(buf) {
+  return startsWith(buf, [0x49, 0x49, 0x2A, 0x00]) ||
+    startsWith(buf, [0x4D, 0x4D, 0x00, 0x2A]);
+}
+
+function isImageContainer(buf) {
+  return isJpeg(buf) ||
+    isPng(buf) ||
+    isGif(buf) ||
+    isWebp(buf) ||
+    isHeic(buf) ||
+    isBmp(buf) ||
+    isTiff(buf);
+}
+
 function isProbablyText(buf) {
   if (!buf || buf.length === 0) return true;
 
@@ -101,12 +157,12 @@ async function verifyMagic(filePath, extRaw) {
     case '.pdf':
       return startsWith(head, [0x25, 0x50, 0x44, 0x46]);
 
-    case '.png':
-      return startsWith(head, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-
     case '.jpg':
     case '.jpeg':
-      return head.length >= 2 && head[0] === 0xFF && head[1] === 0xD8;
+    case '.png':
+      if (isImageContainer(head)) return true;
+      console.log('Image magic reject', ext, head.slice(0, 16).toString('hex'));
+      return false;
 
     case '.docx':
     case '.xlsx':
