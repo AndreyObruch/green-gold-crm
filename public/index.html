@@ -30,8 +30,43 @@
                     <button class="nav-btn" data-tab="create" id="nav-create">Создать задачу</button>
                     <button class="nav-btn" data-tab="archive" id="nav-archive">Архив</button>
                 </nav>
-                <button class="btn btn-ghost" onclick="logout()">Выйти</button>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-ghost" id="rules-btn">Правила</button>
+                    <button class="btn btn-ghost" onclick="logout()">Выйти</button>
+                </div>
             </header>
+
+            <div id="rules-drop" class="rules-drop" role="dialog" aria-label="Правила пользования CRM">
+                <h4>Правила пользования CRM «Green Gold», v1</h4>
+                <ol>
+                    <li>Работай только под своим аккаунтом.</li>
+                    <li>Жизненный цикл задачи: Новая → В работе → Готово; готовое не удаляется, архивирует админ.</li>
+                    <li>Файлы: до 3 на задачу, до 10 МБ, только рабочие форматы.</li>
+                    <li>Обсуждение задачи — в чате задачи, не во внешних мессенджерах.</li>
+                    <li>Статус и комментарий обновляй в день изменения.</li>
+                    <li>Ошибка — сообщи админу в чате задачи с указанием ID задачи.</li>
+                </ol>
+                <h4>Роли и права</h4>
+                <ul>
+                    <li>admin: создание, правка, удаление, архив, восстановление задач и все файлы.</li>
+                    <li>executor: только свои задачи, смена статуса, свои файлы.</li>
+                </ul>
+                <h4>Файлы и форматы</h4>
+                <ul>
+                    <li>pdf, png, jpg, jpeg, docx, xlsx, csv, txt.</li>
+                    <li>Вложение при создании задачи или кнопка 📎 в карточке; скачивание — там же.</li>
+                </ul>
+                <h4>Связь</h4>
+                <ul>
+                    <li>Чат внутри задачи появится в Фазе 2; до него — статусы и комментарии в карточке.</li>
+                    <li>Исполнитель и создатель видны в мете карточки.</li>
+                </ul>
+                <h4>Гигиена и безопасность</h4>
+                <ul>
+                    <li>Не передавай пароль; на общем ПК нажимай «Выйти».</li>
+                    <li>Не загружай личное, не относящееся к задаче.</li>
+                </ul>
+            </div>
 
             <div id="tab-tasks" class="tab-panel">
                 <h3 class="section-title">Задачи</h3>
