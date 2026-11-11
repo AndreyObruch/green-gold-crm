@@ -26,7 +26,7 @@ function isMineTask(t) {
 }
 function assigneeNames(t) {
   if (Array.isArray(t.assignees) && t.assignees.length) return t.assignees.map(a => a.username).join(', ');
-  return t.assignee_username || '—';
+  return t.assignee_username || '\u2014';
 }
 function assigneeLabel(t) {
   return Array.isArray(t.assignees) && t.assignees.length > 1 ? 'Исполнители' : 'Исполнитель';
@@ -158,7 +158,7 @@ function injectSaveViewBtn() {
   const row = viewsRow(); if (!row) return;
   if (!document.getElementById('save-view')) {
     const b = document.createElement('button');
-    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '＋ Сохранить вид';
+    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '\uFF0B Сохранить вид';
     row.appendChild(b);
   }
 }
@@ -169,7 +169,7 @@ function renderCustomViews() {
   customViews.forEach((v, i) => {
     const b = document.createElement('button');
     b.className = 'view-chip'; b.dataset.cview = i;
-    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">×</span>';
+    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">\u00D7</span>';
     row.insertBefore(b, saveBtn);
   });
 }
@@ -232,11 +232,11 @@ function renderTasks() {
     const mp = [assigneeLabel(t) + ': ' + escapeHtml(assigneeNames(t))];
     if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
     const d = fmtDate(t.created_at); if (d) mp.push(d);
-    const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
+    const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
     const filesBox = '<div class="task-actions" id="files-' + t.id + '"></div>';
     let acts;
     if (isTemp) {
-      acts = '<div class="task-actions"><span class="small-note">Создаётся…</span></div>';
+      acts = '<div class="task-actions"><span class="small-note">Создаётся\u2026</span></div>';
     } else {
       acts = '<div class="task-actions">';
       ['new', 'in_progress', 'done'].forEach(s => {
@@ -273,7 +273,7 @@ async function attachFiles(tasks) {
       const fs = await r.json();
       if (!Array.isArray(fs) || fs.length === 0) { box.remove(); return; }
       box.innerHTML = fs.map(f =>
-        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
+        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\u{1F4CE} ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
       ).join('');
     } catch (e) { box.remove(); }
   }));
@@ -291,7 +291,7 @@ async function loadArchive() {
       const mp = [assigneeLabel(t) + ': ' + escapeHtml(assigneeNames(t))];
       if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
       const d = fmtDate(t.created_at); if (d) mp.push(d);
-      const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
+      const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
       const acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">Восстановить</button></div>';
       return '<li class="task-card">' + head + meta + acts + '</li>';
     }).join('');
@@ -412,15 +412,15 @@ function openDrawer(id) {
   document.getElementById('drawer-body').innerHTML =
     '<h3>' + escapeHtml(t.title) + '</h3>' +
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
-    '<p class="task-desc">' + escapeHtml(t.description || '—') + '</p>' +
+    '<p class="task-desc">' + escapeHtml(t.description || '\u2014') + '</p>' +
     '<div class="task-meta"><small>' +
       escapeHtml(assigneeLabel(t)) + ': ' + escapeHtml(assigneeNames(t)) + '<br>' +
-      'Создал: ' + escapeHtml(t.creator_username || '—') + '<br>' + fmtDate(t.created_at) +
+      'Создал: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) +
     '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' +
     '<div class="chat-section"><h4>Чат задачи</h4><div class="chat-box" id="chat-box"></div>' +
     '<div class="chat-form"><textarea id="chat-body" placeholder="Сообщение..."></textarea>' +
-    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">📎 Файл</button>' +
+    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">\u{1F4CE} Файл</button>' +
     '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">Отправить</button></div></div></div>' + edit;
 
   dr.classList.add('open'); ov.classList.add('open');
@@ -432,7 +432,7 @@ function openDrawer(id) {
     const box = document.getElementById('drawer-files');
     if (!box) return;
     if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
-    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + '</button>').join('');
+    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\u{1F4CE} ' + escapeHtml(f.original_name) + '</button>').join('');
   }).catch(() => { });
 
   startPolling(id);
@@ -469,18 +469,21 @@ async function loadChat(taskId) {
     box.innerHTML = (Array.isArray(msgs) ? msgs : []).map(m => {
       const mine = m.user_id === uid ? ' mine' : '';
       const body = m.body ? '<div class="chat-body">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>' : '';
-      const file = m.file_id ? '<div class="task-actions"><button class="chip" data-act="download" data-id="' + m.file_id + '" data-name="' + escapeHtml(m.file_name || 'file') + '">📎 ' + escapeHtml(m.file_name || 'file') + ' (' + Math.max(1, Math.round((m.file_size || 0) / 1024)) + ' KB)</button></div>' : '';
-      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b><small>' + fmtDate(m.created_at) + '</small></div>' + body + file + '</div>';
+      const filesArr = Array.isArray(m.files) ? m.files : (m.file_id ? [{ id: m.file_id, original_name: m.file_name, size: m.file_size }] : []);
+      const fileHtml = filesArr.length ? '<div class="task-actions">' + filesArr.map(f =>
+        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name || 'file') + '">\u{1F4CE} ' + escapeHtml(f.original_name || 'file') + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)</button>'
+      ).join('') + '</div>' : '';
+      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b><small>' + fmtDate(m.created_at) + '</small></div>' + body + fileHtml + '</div>';
     }).join('');
     box.scrollTop = box.scrollHeight;
   } catch (e) { console.error('loadChat', e); }
 }
 
-async function postMessage(taskId, body, fileId) {
+async function postMessage(taskId, body, fileIds) {
   try {
     const payload = { task_id: taskId };
     if (body) payload.body = body;
-    if (fileId) payload.file_id = fileId;
+    if (Array.isArray(fileIds) && fileIds.length) payload.file_ids = fileIds;
     const r = await fetch(API + '/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Отправка не удалась'); return false; }
     return true;
@@ -491,28 +494,31 @@ async function sendChat(taskId) {
   const ta = document.getElementById('chat-body');
   const body = ta ? ta.value.trim() : '';
   if (!body) { alert('Введите сообщение'); return; }
-  const ok = await postMessage(taskId, body, null);
+  const ok = await postMessage(taskId, body, []);
   if (ok) { ta.value = ''; loadChat(taskId); }
 }
 
 function attachChatFile(taskId) {
   const inp = document.createElement('input');
   inp.type = 'file';
-  inp.accept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt';
+  inp.multiple = true;
+  inp.accept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md';
   inp.onchange = async () => {
-    const f = inp.files[0];
-    if (!f) return;
-    if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ'); return; }
+    const list = inp.files ? Array.from(inp.files) : [];
+    if (!list.length) return;
+    if (list.length > 3) { alert('Максимум 3 файла за одно сообщение'); return; }
+    for (const f of list) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
     const fd = new FormData();
-    fd.append('files', f);
+    list.forEach(f => fd.append('files', f));
     fd.append('task_id', String(taskId));
     const r = await fetch(API + '/files', { method: 'POST', body: fd });
     if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Загрузка не удалась'); return; }
     const data = await r.json();
-    const fid = data.files[0].id;
+    const ids = (data.files || []).map(x => x.id).filter(Boolean);
+    if (!ids.length) { alert('Файлы не получены'); return; }
     const ta = document.getElementById('chat-body');
-    const body = ta ? ta.value.trim() : null;
-    const ok = await postMessage(taskId, body || null, fid);
+    const body = ta ? ta.value.trim() : '';
+    const ok = await postMessage(taskId, body || null, ids);
     if (ok) { if (ta) ta.value = ''; loadChat(taskId); }
   };
   inp.click();
