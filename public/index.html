@@ -35,6 +35,27 @@
 
             <div id="tab-tasks" class="tab-panel">
                 <h3 class="section-title">Задачи</h3>
+                <div id="counters" class="saved-views"></div>
+                <div class="toolbar">
+                    <input type="search" id="search-input" class="search-input" placeholder="Поиск: название, описание, исполнитель" aria-label="Поиск задач">
+                    <select id="filter-status" aria-label="Фильтр по статусу">
+                        <option value="all">Все статусы</option>
+                        <option value="new">Новые</option>
+                        <option value="in_progress">В работе</option>
+                        <option value="done">Готово</option>
+                    </select>
+                    <select id="sort-by" aria-label="Сортировка">
+                        <option value="date_desc">Сначала новые</option>
+                        <option value="date_asc">Сначала старые</option>
+                        <option value="title">По названию</option>
+                        <option value="status">По статусу</option>
+                    </select>
+                </div>
+                <div class="saved-views">
+                    <button class="view-chip active" data-view="all">Все</button>
+                    <button class="view-chip" data-view="mine">Мои</button>
+                    <button class="view-chip" data-view="active">Активные</button>
+                </div>
                 <ul id="task-list"></ul>
             </div>
 
@@ -67,6 +88,24 @@
             </div>
         </div>
     </div>
+
+    <div id="bulk-bar" class="bulk-bar" style="display: none;">
+        <span id="bulk-count" class="small-note" style="margin:0">Выбрано: 0</span>
+        <button id="bulk-delete" class="btn btn-danger">Удалить выбранные</button>
+        <button id="bulk-clear" class="btn btn-ghost">Снять выбор</button>
+    </div>
+
+    <div id="drawer-overlay" class="drawer-overlay"></div>
+    <aside id="drawer" class="drawer" aria-label="Детали задачи">
+        <button id="drawer-close" class="btn btn-ghost" style="margin-bottom:12px">Закрыть</button>
+        <div id="drawer-body"></div>
+    </aside>
+
+    <div id="toast" class="toast" role="status">
+        <span id="toast-msg"></span>
+        <button id="toast-undo" class="toast-undo" style="display:none">Отменить</button>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
