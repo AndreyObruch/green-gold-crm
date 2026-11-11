@@ -41,6 +41,7 @@ app.use('/api/auth', rateLimit(20, 60000), require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/files', require('./routes/files'));
+app.use('/api/messages', require('./routes/messages'));
 
 app.use(express.static(path.join(__dirname, 'public')));
 
