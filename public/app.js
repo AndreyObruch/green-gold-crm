@@ -5,6 +5,7 @@ let orderIds = [], customViews = [];
 let currentView = 'all', searchTerm = '', filterStatus = 'all', sortBy = 'date_desc';
 let dragId = null;
 let chatTimer = null, chatTaskId = null;
+let chatDraftFiles = [];
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -103,6 +104,7 @@ async function login() {
 
 function logout() {
   stopPolling();
+  chatDraftFiles = [];
   localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
   token = null; role = null; me = null;
   allTasks = []; usersCache = []; selected.clear();
@@ -384,9 +386,29 @@ async function createTask() {
   }
 }
 
+function refreshDrawerFiles(taskId) {
+  const box = document.getElementById('drawer-files');
+  if (!box) return;
+  fetch(API + '/files?task_id=' + taskId).then(r => r.json()).then(fs => {
+    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
+    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\u{1F4CE} ' + escapeHtml(f.original_name) + '</button>').join('');
+  }).catch(() => { });
+}
+
+function renderChatDraft() {
+  const box = document.getElementById('chat-draft');
+  if (!box) return;
+  if (!chatDraftFiles.length) { box.innerHTML = ''; return; }
+  box.innerHTML = chatDraftFiles.map(f =>
+    '<span class="chip">\u{1F4CE} ' + escapeHtml(f.name) + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)' +
+    ' <span data-act="draft-remove" data-fid="' + f.id + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430">\u00D7</span></span>'
+  ).join('');
+}
+
 function openDrawer(id) {
   const t = allTasks.find(x => x.id === id);
   if (!t || t.id < 0) return;
+  chatDraftFiles = [];
   const dr = document.getElementById('drawer');
   const ov = document.getElementById('drawer-overlay');
   let edit = '';
@@ -419,27 +441,25 @@ function openDrawer(id) {
     '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' +
     '<div class="chat-section"><h4>Чат задачи</h4><div class="chat-box" id="chat-box"></div>' +
-    '<div class="chat-form"><textarea id="chat-body" placeholder="Сообщение..."></textarea>' +
-    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">\u{1F4CE} Файл</button>' +
-    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">Отправить</button></div></div></div>' + edit;
+    '<div class="chat-form"><textarea id="chat-body" placeholder="\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435..."></textarea>' +
+    '<div id="chat-draft" class="chat-draft" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>' +
+    '<input type="file" id="chat-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md" style="display:none">' +
+    '<div class="chat-actions"><button class="chip" data-act="attach-chat">\u{1F4CE} \u0424\u0430\u0439\u043B</button>' +
+    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C</button></div></div></div>' + edit;
 
   dr.classList.add('open'); ov.classList.add('open');
 
   const es = document.getElementById('edit-assignee');
   if (es) { es.multiple = true; es.size = Math.max(4, Math.min(8, usersCache.length || 1)); }
 
-  fetch(API + '/files?task_id=' + id).then(r => r.json()).then(fs => {
-    const box = document.getElementById('drawer-files');
-    if (!box) return;
-    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
-    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\u{1F4CE} ' + escapeHtml(f.original_name) + '</button>').join('');
-  }).catch(() => { });
-
+  refreshDrawerFiles(id);
+  renderChatDraft();
   startPolling(id);
 }
 
 function closeDrawer() {
   stopPolling();
+  chatDraftFiles = [];
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
 }
@@ -493,35 +513,60 @@ async function postMessage(taskId, body, fileIds) {
 async function sendChat(taskId) {
   const ta = document.getElementById('chat-body');
   const body = ta ? ta.value.trim() : '';
-  if (!body) { alert('Введите сообщение'); return; }
-  const ok = await postMessage(taskId, body, []);
-  if (ok) { ta.value = ''; loadChat(taskId); }
+  const ids = chatDraftFiles.map(f => f.id);
+  if (!body && !ids.length) { alert('Введите сообщение или прикрепите файл'); return; }
+  const ok = await postMessage(taskId, body || null, ids);
+  if (ok) {
+    if (ta) ta.value = '';
+    chatDraftFiles = [];
+    renderChatDraft();
+    loadChat(taskId);
+  }
 }
 
-function attachChatFile(taskId) {
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.multiple = true;
-  inp.accept = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md';
-  inp.onchange = async () => {
-    const list = inp.files ? Array.from(inp.files) : [];
-    if (!list.length) return;
-    if (list.length > 3) { alert('Максимум 3 файла за одно сообщение'); return; }
-    for (const f of list) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
-    const fd = new FormData();
-    list.forEach(f => fd.append('files', f));
-    fd.append('task_id', String(taskId));
+function attachChatFile() {
+  const inp = document.getElementById('chat-file-input');
+  if (inp) { inp.value = ''; inp.click(); }
+}
+
+async function handleChatFileSelect(inp) {
+  const list = inp.files ? Array.from(inp.files) : [];
+  if (!list.length) return;
+  const taskId = chatTaskId;
+  if (!taskId) { inp.value = ''; return; }
+  if (chatDraftFiles.length + list.length > 3) {
+    alert('Максимум 3 файла в одном сообщении');
+    inp.value = '';
+    return;
+  }
+  for (const f of list) {
+    if (f.size > 10 * 1024 * 1024) {
+      alert('Файл > 10 МБ: ' + f.name);
+      inp.value = '';
+      return;
+    }
+  }
+  const fd = new FormData();
+  list.forEach(f => fd.append('files', f));
+  fd.append('task_id', String(taskId));
+  try {
     const r = await fetch(API + '/files', { method: 'POST', body: fd });
-    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Загрузка не удалась'); return; }
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(d.error || 'Загрузка не удалась');
+      inp.value = '';
+      return;
+    }
     const data = await r.json();
-    const ids = (data.files || []).map(x => x.id).filter(Boolean);
-    if (!ids.length) { alert('Файлы не получены'); return; }
-    const ta = document.getElementById('chat-body');
-    const body = ta ? ta.value.trim() : '';
-    const ok = await postMessage(taskId, body || null, ids);
-    if (ok) { if (ta) ta.value = ''; loadChat(taskId); }
-  };
-  inp.click();
+    const newFiles = (data.files || []).map(x => ({ id: x.id, name: x.name, size: x.size })).filter(f => f.id);
+    chatDraftFiles = chatDraftFiles.concat(newFiles);
+    renderChatDraft();
+    refreshDrawerFiles(taskId);
+  } catch (err) {
+    console.error('chat attach', err);
+    alert('Загрузка не удалась');
+  }
+  inp.value = '';
 }
 
 async function saveEdit(id) {
@@ -722,11 +767,22 @@ document.getElementById('bulk-delete').addEventListener('click', () => {
 document.getElementById('bulk-clear').addEventListener('click', () => { selected.clear(); renderTasks(); });
 document.getElementById('drawer-close').addEventListener('click', closeDrawer);
 document.getElementById('drawer-overlay').addEventListener('click', closeDrawer);
+document.getElementById('drawer').addEventListener('change', e => {
+  const inp = e.target.closest('#chat-file-input');
+  if (inp) handleChatFileSelect(inp);
+});
 document.getElementById('drawer').addEventListener('click', e => {
   const dl = e.target.closest('button[data-act="download"]');
   if (dl) { downloadFile(dl.dataset.id, dl.dataset.name); return; }
+  const rm = e.target.closest('[data-act="draft-remove"]');
+  if (rm) {
+    const fid = parseInt(rm.dataset.fid, 10);
+    chatDraftFiles = chatDraftFiles.filter(f => f.id !== fid);
+    renderChatDraft();
+    return;
+  }
   const ac = e.target.closest('[data-act="attach-chat"]');
-  if (ac) { attachChatFile(parseInt(ac.dataset.id, 10)); return; }
+  if (ac) { attachChatFile(); return; }
   const cs = e.target.closest('#chat-send');
   if (cs) { sendChat(parseInt(cs.dataset.id, 10)); return; }
   const sv = e.target.closest('button[data-act="save-edit"]');
