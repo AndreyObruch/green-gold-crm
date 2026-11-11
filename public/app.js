@@ -11,7 +11,7 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function statusClass(s) { return ({ 'new': 'st-new', 'in_progress': 'st-prog', 'done': 'st-done' })[s] || 'st-other'; }
-function statusLabel(s) { return ({ 'new': '\u041D\u043E\u0432\u0430\u044F', 'in_progress': '\u0412 \u0440\u0430\u0431\u043E\u0442\u0435', 'done': '\u0413\u043E\u0442\u043E\u0432\u043E' })[s] || escapeHtml(s); }
+function statusLabel(s) { return ({ 'new': 'Новая', 'in_progress': 'В работе', 'done': 'Готово' })[s] || escapeHtml(s); }
 function fmtDate(s) { if (!s) return ''; return String(s).slice(0, 16).replace('T', ' '); }
 function getUserId() {
   try {
@@ -19,6 +19,17 @@ function getUserId() {
     if (!t) return null;
     return JSON.parse(atob(t.split('.')[1])).id;
   } catch (e) { return null; }
+}
+function isMineTask(t) {
+  if (Array.isArray(t.assignees)) return t.assignees.some(a => a.username === me);
+  return t.assignee_username === me;
+}
+function assigneeNames(t) {
+  if (Array.isArray(t.assignees) && t.assignees.length) return t.assignees.map(a => a.username).join(', ');
+  return t.assignee_username || '—';
+}
+function assigneeLabel(t) {
+  return Array.isArray(t.assignees) && t.assignees.length > 1 ? 'Исполнители' : 'Исполнитель';
 }
 
 const _rawFetch = window.fetch.bind(window);
@@ -40,13 +51,17 @@ const TABS = {
   archive: { panel: 'archive-panel', load: loadArchive }
 };
 
-function switchTab(name) {
+function activateTab(name) {
   if (!TABS[name]) name = 'tasks';
   Object.keys(TABS).forEach(k => {
     const p = document.getElementById(TABS[k].panel);
     if (p) p.style.display = (k === name) ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+}
+
+function switchTab(name) {
+  activateTab(name);
   const t = TABS[name];
   if (t && typeof t.load === 'function') t.load();
 }
@@ -101,10 +116,16 @@ async function loadUsers() {
     const users = await res.json();
     usersCache = Array.isArray(users) ? users : [];
     const sel = document.getElementById('task-assignee');
+    if (!sel) return;
+    sel.multiple = true;
+    sel.size = Math.max(4, Math.min(8, usersCache.length || 1));
+    const lab = document.querySelector('label[for="task-assignee"]');
+    if (lab) lab.textContent = 'Исполнители (можно выбрать несколько: Ctrl/Cmd или Shift)';
     sel.innerHTML = '';
     usersCache.forEach(u => {
       const opt = document.createElement('option');
-      opt.value = u.id; opt.textContent = u.username + ' (' + u.role + ')';
+      opt.value = u.id;
+      opt.textContent = u.username + ' (' + u.role + ')';
       sel.appendChild(opt);
     });
   } catch (e) { console.error('loadUsers', e); }
@@ -122,7 +143,7 @@ function restoreUI() {
   } catch (e) { }
   const sb = document.getElementById('sort-by');
   if (sb && ![...sb.options].some(o => o.value === 'manual')) {
-    const o = document.createElement('option'); o.value = 'manual'; o.textContent = '\u0412\u0440\u0443\u0447\u043D\u0443\u044E (\u043F\u0435\u0440\u0435\u0442\u0430\u0441\u043A\u0438\u0432\u0430\u043D\u0438\u0435)'; sb.appendChild(o);
+    const o = document.createElement('option'); o.value = 'manual'; o.textContent = 'Вручную (перетаскивание)'; sb.appendChild(o);
   }
   if (sb) sb.value = sortBy;
   const fs = document.getElementById('filter-status'); if (fs) fs.value = filterStatus;
@@ -137,7 +158,7 @@ function injectSaveViewBtn() {
   const row = viewsRow(); if (!row) return;
   if (!document.getElementById('save-view')) {
     const b = document.createElement('button');
-    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '\uFF0B \u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0432\u0438\u0434';
+    b.id = 'save-view'; b.className = 'view-chip'; b.textContent = '＋ Сохранить вид';
     row.appendChild(b);
   }
 }
@@ -148,7 +169,7 @@ function renderCustomViews() {
   customViews.forEach((v, i) => {
     const b = document.createElement('button');
     b.className = 'view-chip'; b.dataset.cview = i;
-    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0432\u0438\u0434">\u00D7</span>';
+    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">×</span>';
     row.insertBefore(b, saveBtn);
   });
 }
@@ -166,12 +187,16 @@ function applyNamedView(v) {
 
 function applyView(tasks) {
   let out = tasks.slice();
-  if (currentView === 'mine') out = out.filter(t => t.assignee_username === me);
+  if (currentView === 'mine') out = out.filter(isMineTask);
   if (currentView === 'active') out = out.filter(t => t.status !== 'done');
   if (filterStatus !== 'all') out = out.filter(t => t.status === filterStatus);
   if (searchTerm) {
     const q = searchTerm.toLowerCase();
-    out = out.filter(t => (t.title || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q) || (t.assignee_username || '').toLowerCase().includes(q));
+    out = out.filter(t =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (t.description || '').toLowerCase().includes(q) ||
+      (assigneeNames(t) || '').toLowerCase().includes(q)
+    );
   }
   const idx = id => { const p = orderIds.indexOf(id); return p === -1 ? 999999 : p; };
   if (sortBy === 'manual') out.sort((a, b) => idx(a.id) - idx(b.id));
@@ -187,37 +212,43 @@ function renderCounters(tasks) {
   tasks.forEach(t => { if (c[t.status] !== undefined) c[t.status]++; });
   const el = document.getElementById('counters');
   if (el) el.innerHTML =
-    '<span class="view-chip st-new">\u041D\u043E\u0432\u044B\u0435: ' + c.new + '</span>' +
-    '<span class="view-chip st-prog">\u0412 \u0440\u0430\u0431\u043E\u0442\u0435: ' + c.in_progress + '</span>' +
-    '<span class="view-chip st-done">\u0413\u043E\u0442\u043E\u0432\u043E: ' + c.done + '</span>';
+    '<span class="view-chip st-new">Новые: ' + c.new + '</span>' +
+    '<span class="view-chip st-prog">В работе: ' + c.in_progress + '</span>' +
+    '<span class="view-chip st-done">Готово: ' + c.done + '</span>';
 }
 
 function renderTasks() {
   const list = document.getElementById('task-list');
   const view = applyView(allTasks);
   renderCounters(allTasks);
-  if (view.length === 0) { list.innerHTML = '<li class="empty-state">\u041D\u0435\u0442 \u0437\u0430\u0434\u0430\u0447 \u043F\u043E\u0434 \u0442\u0435\u043A\u0443\u0449\u0438\u0439 \u0444\u0438\u043B\u044C\u0442\u0440</li>'; updateBulkBar(); return; }
+  if (view.length === 0) { list.innerHTML = '<li class="empty-state">Нет задач под текущий фильтр</li>'; updateBulkBar(); return; }
   const manual = sortBy === 'manual';
   list.innerHTML = view.map(t => {
+    const isTemp = t.id < 0;
     const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
-    const chk = role === 'admin' ? '<input type="checkbox" class="task-check" data-id="' + t.id + '"' + (selected.has(t.id) ? ' checked' : '') + '>' : '';
+    const chk = (!isTemp && role === 'admin') ? '<input type="checkbox" class="task-check" data-id="' + t.id + '"' + (selected.has(t.id) ? ' checked' : '') + '>' : '';
     const head = '<div class="task-head">' + chk + '<b class="task-title-text" data-act="open" data-id="' + t.id + '" style="cursor:pointer">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
     const desc = (t.description && String(t.description).trim()) ? '<div class="task-desc">' + escapeHtml(String(t.description)).replace(/\n/g, '<br>') + '</div>' : '';
-    const mp = ['\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014')];
-    if (t.creator_username) mp.push('\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username));
+    const mp = [assigneeLabel(t) + ': ' + escapeHtml(assigneeNames(t))];
+    if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
     const d = fmtDate(t.created_at); if (d) mp.push(d);
-    const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
+    const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
     const filesBox = '<div class="task-actions" id="files-' + t.id + '"></div>';
-    let acts = '<div class="task-actions">';
-    ['new', 'in_progress', 'done'].forEach(s => {
-      acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
-    });
-    if (role === 'admin') {
-      acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">\u041F\u0440\u0430\u0432\u043A\u0430</button> ';
-      acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043B\u0438\u0442\u044C</button>';
+    let acts;
+    if (isTemp) {
+      acts = '<div class="task-actions"><span class="small-note">Создаётся…</span></div>';
+    } else {
+      acts = '<div class="task-actions">';
+      ['new', 'in_progress', 'done'].forEach(s => {
+        acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
+      });
+      if (role === 'admin') {
+        acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">Правка</button> ';
+        acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">Удалить</button>';
+      }
+      acts += '</div>';
     }
-    acts += '</div>';
-    return '<li class="task-card' + (selected.has(t.id) ? ' selected' : '') + '" data-task="' + t.id + '"' + (manual ? ' draggable="true"' : '') + '>' + head + desc + meta + filesBox + acts + '</li>';
+    return '<li class="task-card' + (selected.has(t.id) ? ' selected' : '') + '" data-task="' + t.id + '"' + (manual && !isTemp ? ' draggable="true"' : '') + '>' + head + desc + meta + filesBox + acts + '</li>';
   }).join('');
   attachFiles(view);
   updateBulkBar();
@@ -236,13 +267,13 @@ async function loadTasks() {
 async function attachFiles(tasks) {
   await Promise.all(tasks.map(async t => {
     const box = document.getElementById('files-' + t.id);
-    if (!box) return;
+    if (!box || t.id < 0) return;
     try {
       const r = await fetch(API + '/files?task_id=' + t.id);
       const fs = await r.json();
       if (!Array.isArray(fs) || fs.length === 0) { box.remove(); return; }
       box.innerHTML = fs.map(f =>
-        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
+        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</button>'
       ).join('');
     } catch (e) { box.remove(); }
   }));
@@ -257,11 +288,11 @@ async function loadArchive() {
     list.innerHTML = tasks.map(t => {
       const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
       const head = '<div class="task-head"><b class="task-title-text">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
-      const mp = ['\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014')];
-      if (t.creator_username) mp.push('\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username));
+      const mp = [assigneeLabel(t) + ': ' + escapeHtml(assigneeNames(t))];
+      if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
       const d = fmtDate(t.created_at); if (d) mp.push(d);
-      const meta = '<div class="task-meta"><small>' + mp.join(' \u00B7 ') + '</small></div>';
-      const acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C</button></div>';
+      const meta = '<div class="task-meta"><small>' + mp.join(' · ') + '</small></div>';
+      const acts = '<div class="task-actions"><button class="chip chip-restore" data-act="restore" data-id="' + t.id + '">Восстановить</button></div>';
       return '<li class="task-card">' + head + meta + acts + '</li>';
     }).join('');
   } catch (e) { console.error('loadArchive', e); }
@@ -281,36 +312,54 @@ async function downloadFile(id, name) {
 }
 
 async function createTask() {
-  const title = document.getElementById('task-title').value;
-  const description = document.getElementById('task-desc').value;
-  const assigneeRaw = document.getElementById('task-assignee').value;
-  const assigneeId = assigneeRaw ? parseInt(assigneeRaw, 10) : null;
+  const titleEl = document.getElementById('task-title');
+  const descEl = document.getElementById('task-desc');
+  const assigneeEl = document.getElementById('task-assignee');
   const fileInput = document.getElementById('task-files');
+
+  const title = titleEl ? titleEl.value.trim() : '';
+  const description = descEl ? descEl.value : '';
+  const ids = assigneeEl ? Array.from(assigneeEl.selectedOptions).map(o => parseInt(o.value, 10)).filter(n => Number.isInteger(n) && n > 0) : [];
   const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
-  if (sel.length > 3) { alert('\u041C\u0430\u043A\u0441\u0438\u043C\u0443\u043C 3 \u0444\u0430\u0439\u043B\u0430'); return; }
-  for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('\u0424\u0430\u0439\u043B > 10 \u041C\u0411: ' + f.name); return; } }
-  if (!title.trim()) { alert('\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E'); return; }
+
+  if (sel.length > 3) { alert('Максимум 3 файла за одну загрузку'); return; }
+  for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
+  if (!title) { alert('Название обязательно'); return; }
+
   const tempId = -Date.now();
-  const au = usersCache.find(u => u.id === assigneeId);
+  const chosen = usersCache.filter(u => ids.indexOf(u.id) !== -1).map(u => ({ id: u.id, username: u.username }));
+
   allTasks.unshift({
-    id: tempId, title: title, description: description, status: 'new',
-    assignee_id: assigneeId, assignee_username: au ? au.username : null,
-    creator_username: me, created_at: new Date().toISOString()
+    id: tempId,
+    title: title,
+    description: description,
+    status: 'new',
+    assignees: chosen,
+    assignee_id: chosen.length ? chosen[0].id : null,
+    assignee_username: chosen.map(u => u.username).join(', '),
+    creator_username: me,
+    created_at: new Date().toISOString()
   });
-  document.getElementById('task-title').value = '';
-  document.getElementById('task-desc').value = '';
-  switchTab('tasks');
+
+  activateTab('tasks');
+  renderTasks();
+
   try {
     const res = await fetch(API + '/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, description, assignee_id: assigneeId })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description, assignee_ids: ids })
     });
     const data = await res.json();
     if (!res.ok) {
-      allTasks = allTasks.filter(t => t.id !== tempId); renderTasks(); alert(data.error); return;
+      allTasks = allTasks.filter(t => t.id !== tempId);
+      renderTasks();
+      alert(data.error);
+      return;
     }
-    const t = allTasks.find(x => x.id === tempId);
-    if (t) t.id = data.id;
+
+    allTasks = allTasks.map(t => t.id === tempId ? data : t);
+
     if (sel.length) {
       const fd = new FormData();
       sel.forEach(f => fd.append('files', f));
@@ -318,52 +367,77 @@ async function createTask() {
       const ur = await fetch(API + '/files', { method: 'POST', body: fd });
       if (!ur.ok) {
         const ud = await ur.json().catch(() => ({}));
-        alert('\u0417\u0430\u0434\u0430\u0447\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0430, \u043D\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C: ' + (ud.error || ''));
+        alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
       }
-      fileInput.value = '';
     }
+
+    if (titleEl) titleEl.value = '';
+    if (descEl) descEl.value = '';
+    if (fileInput) fileInput.value = '';
+
     renderTasks();
-    showToast('\u0417\u0430\u0434\u0430\u0447\u0430 \u0441\u043E\u0437\u0434\u0430\u043D\u0430');
+    showToast('Задача создана');
   } catch (e) {
-    allTasks = allTasks.filter(t => t.id !== tempId); renderTasks(); console.error('createTask', e);
+    allTasks = allTasks.filter(t => t.id !== tempId);
+    renderTasks();
+    console.error('createTask', e);
   }
 }
 
 function openDrawer(id) {
   const t = allTasks.find(x => x.id === id);
-  if (!t) return;
+  if (!t || t.id < 0) return;
   const dr = document.getElementById('drawer');
   const ov = document.getElementById('drawer-overlay');
   let edit = '';
   if (role === 'admin') {
-    const opts = usersCache.map(u => '<option value="' + u.id + '"' + (u.id === t.assignee_id ? ' selected' : '') + '>' + escapeHtml(u.username) + '</option>').join('');
-    edit = '<div class="field"><label for="edit-title">\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
-      '<div class="field"><label for="edit-desc">\u041E\u043F\u0438\u0441\u0430\u043D\u0438\u0435</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
-      '<div class="form-row"><div class="field"><label for="edit-assignee">\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C</label><select id="edit-assignee"><option value="">\u2014</option>' + opts + '</select></div>' +
-      '<div class="field"><label for="edit-status">\u0421\u0442\u0430\u0442\u0443\u0441</label><select id="edit-status">' +
-      ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
-      '</select></div></div>' +
-      '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C</button>';
+    const assignedIds = Array.isArray(t.assignees) ? t.assignees.map(a => a.id) : (t.assignee_id ? [t.assignee_id] : []);
+    const size = Math.max(4, Math.min(8, usersCache.length || 1));
+    const opts = usersCache.map(u =>
+      '<option value="' + u.id + '"' + (assignedIds.indexOf(u.id) !== -1 ? ' selected' : '') + '>' +
+      escapeHtml(u.username) + ' (' + escapeHtml(u.role) + ')</option>'
+    ).join('');
+    edit =
+      '<div class="field"><label for="edit-title">Название</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
+      '<div class="field"><label for="edit-desc">Описание</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
+      '<div class="form-row">' +
+        '<div class="field"><label for="edit-assignee">Исполнители (можно выбрать несколько: Ctrl/Cmd или Shift)</label>' +
+        '<select id="edit-assignee" multiple size="' + size + '">' + opts + '</select></div>' +
+        '<div class="field"><label for="edit-status">Статус</label><select id="edit-status">' +
+        ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
+        '</select></div>' +
+      '</div>' +
+      '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">Сохранить</button>';
   }
   document.getElementById('drawer-body').innerHTML =
     '<h3>' + escapeHtml(t.title) + '</h3>' +
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
-    '<p class="task-desc">' + escapeHtml(t.description || '\u2014') + '</p>' +
-    '<div class="task-meta"><small>\u0418\u0441\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C: ' + escapeHtml(t.assignee_username || '\u2014') + '<br>\u0421\u043E\u0437\u0434\u0430\u043B: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) + '</small></div>' +
+    '<p class="task-desc">' + escapeHtml(t.description || '—') + '</p>' +
+    '<div class="task-meta"><small>' +
+      escapeHtml(assigneeLabel(t)) + ': ' + escapeHtml(assigneeNames(t)) + '<br>' +
+      'Создал: ' + escapeHtml(t.creator_username || '—') + '<br>' + fmtDate(t.created_at) +
+    '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' +
-    '<div class="chat-section"><h4>\u0427\u0430\u0442 \u0437\u0430\u0434\u0430\u0447\u0438</h4><div class="chat-box" id="chat-box"></div>' +
-    '<div class="chat-form"><textarea id="chat-body" placeholder="\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435..."></textarea>' +
-    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">\uD83D\uDCCE \u0424\u0430\u0439\u043B</button>' +
-    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C</button></div></div></div>' + edit;
+    '<div class="chat-section"><h4>Чат задачи</h4><div class="chat-box" id="chat-box"></div>' +
+    '<div class="chat-form"><textarea id="chat-body" placeholder="Сообщение..."></textarea>' +
+    '<div class="chat-actions"><button class="chip" data-act="attach-chat" data-id="' + t.id + '">📎 Файл</button>' +
+    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">Отправить</button></div></div></div>' + edit;
+
   dr.classList.add('open'); ov.classList.add('open');
+
+  const es = document.getElementById('edit-assignee');
+  if (es) { es.multiple = true; es.size = Math.max(4, Math.min(8, usersCache.length || 1)); }
+
   fetch(API + '/files?task_id=' + id).then(r => r.json()).then(fs => {
     const box = document.getElementById('drawer-files');
     if (!box) return;
-    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">\u0412\u043B\u043E\u0436\u0435\u043D\u0438\u0439 \u043D\u0435\u0442</span>'; return; }
-    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\uD83D\uDCCE ' + escapeHtml(f.original_name) + '</button>').join('');
+    if (!Array.isArray(fs) || fs.length === 0) { box.innerHTML = '<span class="small-note">Вложений нет</span>'; return; }
+    box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">📎 ' + escapeHtml(f.original_name) + '</button>').join('');
   }).catch(() => { });
+
   startPolling(id);
 }
+
 function closeDrawer() {
   stopPolling();
   document.getElementById('drawer').classList.remove('open');
@@ -395,7 +469,7 @@ async function loadChat(taskId) {
     box.innerHTML = (Array.isArray(msgs) ? msgs : []).map(m => {
       const mine = m.user_id === uid ? ' mine' : '';
       const body = m.body ? '<div class="chat-body">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>' : '';
-      const file = m.file_id ? '<div class="task-actions"><button class="chip" data-act="download" data-id="' + m.file_id + '" data-name="' + escapeHtml(m.file_name || 'file') + '">\uD83D\uDCCE ' + escapeHtml(m.file_name || 'file') + ' (' + Math.max(1, Math.round((m.file_size || 0) / 1024)) + ' KB)</button></div>' : '';
+      const file = m.file_id ? '<div class="task-actions"><button class="chip" data-act="download" data-id="' + m.file_id + '" data-name="' + escapeHtml(m.file_name || 'file') + '">📎 ' + escapeHtml(m.file_name || 'file') + ' (' + Math.max(1, Math.round((m.file_size || 0) / 1024)) + ' KB)</button></div>' : '';
       return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b><small>' + fmtDate(m.created_at) + '</small></div>' + body + file + '</div>';
     }).join('');
     box.scrollTop = box.scrollHeight;
@@ -408,7 +482,7 @@ async function postMessage(taskId, body, fileId) {
     if (body) payload.body = body;
     if (fileId) payload.file_id = fileId;
     const r = await fetch(API + '/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || '\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C'); return false; }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Отправка не удалась'); return false; }
     return true;
   } catch (e) { console.error('postMessage', e); return false; }
 }
@@ -416,7 +490,7 @@ async function postMessage(taskId, body, fileId) {
 async function sendChat(taskId) {
   const ta = document.getElementById('chat-body');
   const body = ta ? ta.value.trim() : '';
-  if (!body) { alert('\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435'); return; }
+  if (!body) { alert('Введите сообщение'); return; }
   const ok = await postMessage(taskId, body, null);
   if (ok) { ta.value = ''; loadChat(taskId); }
 }
@@ -428,12 +502,12 @@ function attachChatFile(taskId) {
   inp.onchange = async () => {
     const f = inp.files[0];
     if (!f) return;
-    if (f.size > 10 * 1024 * 1024) { alert('\u0424\u0430\u0439\u043B > 10 \u041C\u0411'); return; }
+    if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ'); return; }
     const fd = new FormData();
     fd.append('files', f);
     fd.append('task_id', String(taskId));
     const r = await fetch(API + '/files', { method: 'POST', body: fd });
-    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || '\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u0435 \u0443\u0434\u0430\u043B\u0430\u0441\u044C'); return; }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Загрузка не удалась'); return; }
     const data = await r.json();
     const fid = data.files[0].id;
     const ta = document.getElementById('chat-body');
@@ -447,16 +521,31 @@ function attachChatFile(taskId) {
 async function saveEdit(id) {
   const t = allTasks.find(x => x.id === id);
   if (!t) return;
+  const assigneeSel = document.getElementById('edit-assignee');
+  const ids = assigneeSel ? Array.from(assigneeSel.selectedOptions).map(o => parseInt(o.value, 10)).filter(n => Number.isInteger(n) && n > 0) : [];
   const payload = {
     title: document.getElementById('edit-title').value,
     description: document.getElementById('edit-desc').value,
     status: document.getElementById('edit-status').value,
-    assignee_id: document.getElementById('edit-assignee').value || null
+    assignee_ids: ids
   };
-  const old = { title: t.title, description: t.description, status: t.status, assignee_id: t.assignee_id, assignee_username: t.assignee_username };
-  Object.assign(t, { title: payload.title, description: payload.description, status: payload.status, assignee_id: payload.assignee_id });
-  const au = usersCache.find(u => u.id === payload.assignee_id);
-  t.assignee_username = au ? au.username : null;
+  const old = {
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    assignee_id: t.assignee_id,
+    assignee_username: t.assignee_username,
+    assignees: Array.isArray(t.assignees) ? t.assignees.slice() : []
+  };
+  const chosen = usersCache.filter(u => ids.indexOf(u.id) !== -1).map(u => ({ id: u.id, username: u.username }));
+  Object.assign(t, {
+    title: payload.title,
+    description: payload.description,
+    status: payload.status,
+    assignees: chosen,
+    assignee_id: chosen.length ? chosen[0].id : null,
+    assignee_username: chosen.map(u => u.username).join(', ')
+  });
   renderTasks(); closeDrawer();
   try {
     const r = await fetch(API + '/tasks/' + id, {
@@ -467,7 +556,7 @@ async function saveEdit(id) {
       Object.assign(t, old); renderTasks();
       const d = await r.json(); alert(d.error); return;
     }
-    showToast('\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E');
+    showToast('Сохранено');
   } catch (e) { Object.assign(t, old); renderTasks(); console.error('saveEdit', e); }
 }
 
@@ -488,7 +577,7 @@ function updateBulkBar() {
   if (!bar) return;
   if (selected.size === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
-  document.getElementById('bulk-count').textContent = '\u0412\u044B\u0431\u0440\u0430\u043D\u043E: ' + selected.size;
+  document.getElementById('bulk-count').textContent = 'Выбрано: ' + selected.size;
 }
 
 async function deleteTasks(ids) {
@@ -496,7 +585,7 @@ async function deleteTasks(ids) {
   ids.forEach(id => selected.delete(id));
   renderTasks();
   for (const id of ids) { await fetch(API + '/tasks/' + id, { method: 'DELETE' }); }
-  showToast('\u0423\u0434\u0430\u043B\u0435\u043D\u043E: ' + ids.length, async () => {
+  showToast('Удалено: ' + ids.length, async () => {
     for (const id of ids) { await fetch(API + '/tasks/' + id + '/restore', { method: 'POST' }); }
     loadTasks();
   });
@@ -533,6 +622,7 @@ taskList.addEventListener('click', async e => {
   if (act === 'download') { downloadFile(btn.dataset.id, btn.dataset.name); return; }
   if (act === 'open') { openDrawer(id); return; }
   if (act === 'edit') { openDrawer(id); return; }
+  if (id < 0) return;
   try {
     if (act === 'status') {
       const t = allTasks.find(x => x.id === id);
@@ -543,7 +633,7 @@ taskList.addEventListener('click', async e => {
         body: JSON.stringify({ status: btn.dataset.val })
       });
       if (!r.ok) { if (t) t.status = old; renderTasks(); const d = await r.json(); alert(d.error); return; }
-      showToast('\u0421\u0442\u0430\u0442\u0443\u0441 \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D');
+      showToast('Статус обновлён');
     } else if (act === 'delete') {
       await deleteTasks([id]);
     }
@@ -579,7 +669,9 @@ taskList.addEventListener('dragover', e => {
 taskList.addEventListener('dragend', e => {
   const li = e.target.closest('li.task-card');
   if (li) { li.classList.remove('dragging'); li.style.opacity = ''; }
-  orderIds = [...taskList.querySelectorAll('li.task-card')].map(x => parseInt(x.dataset.task, 10));
+  orderIds = [...taskList.querySelectorAll('li.task-card')]
+    .map(x => parseInt(x.dataset.task, 10))
+    .filter(n => Number.isInteger(n) && n > 0);
   localStorage.setItem('gg_order', JSON.stringify(orderIds));
 });
 
@@ -609,7 +701,7 @@ viewsRow().addEventListener('click', e => {
   const pv = e.target.closest('[data-view]');
   if (pv) { currentView = pv.dataset.view; persistUI(); syncViewChips(); renderTasks(); return; }
   if (e.target.closest('#save-view')) {
-    const name = prompt('\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0432\u0438\u0434\u0430:');
+    const name = prompt('Название вида:');
     if (!name) return;
     customViews.push({ name, view: currentView, search: searchTerm, filter: filterStatus, sort: sortBy });
     localStorage.setItem('gg_views', JSON.stringify(customViews));
