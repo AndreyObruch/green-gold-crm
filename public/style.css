@@ -191,6 +191,25 @@ input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
 .rules-drop ol,.rules-drop ul{margin:0 0 12px;padding-left:18px;color:#c4d2c8;font-size:.88rem}
 .rules-drop li{margin-bottom:6px}
 
+.chat-section{margin-top:16px;border-top:1px solid var(--border);padding-top:14px}
+.chat-section h4{margin:0 0 10px;color:var(--gold-soft);font-size:.95rem}
+.chat-box{
+  max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  padding:6px;margin-bottom:10px;background:#0f1713;border:1px solid var(--border);border-radius:var(--radius-sm);
+}
+.chat-box:empty::after{content:"\u041F\u043E\u043A\u0430 \u043F\u0443\u0441\u0442\u043E";color:var(--muted);font-size:.82rem;padding:8px}
+.chat-msg{background:var(--overlay);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px}
+.chat-msg.mine{border-color:rgba(46,158,99,.45);background:rgba(46,158,99,.10)}
+.chat-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:4px}
+.chat-head b{font-size:.82rem;color:var(--green-soft)}
+.chat-msg.mine .chat-head b{color:var(--acid)}
+.chat-head small{font-size:.72rem;color:var(--muted)}
+.chat-body{font-size:.88rem;color:#c4d2c8;overflow-wrap:anywhere;word-break:break-word}
+.chat-form textarea{min-height:56px;resize:vertical}
+.chat-actions{display:flex;gap:8px;align-items:center;margin-top:8px}
+.chat-actions .chip{flex:0 0 auto}
+.chat-actions #chat-send{margin-left:auto}
+
 .bulk-bar{
   position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;
   display:flex;gap:8px;align-items:center;padding:10px 16px;
@@ -236,6 +255,7 @@ input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
   .toolbar select{flex:1 1 100%}
   .drawer{width:100%}
   .rules-drop{top:auto;bottom:16px;left:16px;right:16px;width:auto;max-height:60vh}
+  .chat-box{max-height:220px}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
