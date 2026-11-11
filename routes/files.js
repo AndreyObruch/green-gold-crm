@@ -64,76 +64,100 @@ async function canAccessTask(task, user) {
   return isAssigned(task.id, user.id);
 }
 
-router.post('/', auth, async (req, res) => {
-  try {
-    const taskId = parseInt(req.body.task_id, 10);
-    if (isNaN(taskId)) return res.status(400).json({ error: 'task_id required' });
+router.post('/', auth, (req, res) => {
+  up.upload.array('files', up.MAX_FILES)(req, res, async (err) => {
+    const files = req.files || [];
 
-    const task = await getActiveTask(taskId);
-    if (!task) return res.status(404).json({ error: 'Task not found' });
+    const cleanup = () => {
+      files.forEach((f) => {
+        if (f && f.path) {
+          fs.unlink(f.path, () => {});
+        }
+      });
+    };
 
-    const allowed = await canAccessTask(task, req.user);
-    if (!allowed) {
-      audit(req.user.id, req.user.username, 'file_upload_denied', 'file', null, 'task_access');
-      return res.status(403).json({ error: 'Access denied' });
+    if (err) {
+      cleanup();
+      const map = {
+        EXT_NOT_ALLOWED: 'Extension not allowed',
+        LIMIT_FILE_SIZE: 'File too large (max 10MB)',
+        LIMIT_FILE_COUNT: 'Too many files (max 3)',
+        LIMIT_UNEXPECTED_FILE: 'Unexpected field'
+      };
+      return res.status(400).json({ error: map[err.code] || map[err.message] || err.message });
     }
 
-    up.upload.array('files', up.MAX_FILES)(req, res, async (err) => {
-      if (err) {
-        const map = {
-          EXT_NOT_ALLOWED: 'Extension not allowed',
-          LIMIT_FILE_SIZE: 'File too large (max 10MB)',
-          LIMIT_FILE_COUNT: 'Too many files (max 3)',
-          LIMIT_UNEXPECTED_FILE: 'Unexpected field'
-        };
-        return res.status(400).json({ error: map[err.code] || map[err.message] || err.message });
-      }
+    try {
+      const rawTaskId = req.body && req.body.task_id !== undefined ? req.body.task_id : null;
 
-      const files = req.files || [];
-      if (files.length === 0) return res.status(400).json({ error: 'No files' });
-
-      const cleanup = () => {
-        files.forEach((f) => {
-          fs.unlink(f.path, () => {});
-        });
-      };
-
-      try {
-        for (const f of files) {
-          const ext = path.extname(decodeName(f.originalname) || '').toLowerCase();
-          const ok = await up.verifyMagic(f.path, ext);
-          if (!ok) {
-            cleanup();
-            return res.status(400).json({ error: 'File content does not match extension' });
-          }
-        }
-
-        const inserted = [];
-        for (const f of files) {
-          const buf = await fs.promises.readFile(f.path);
-          const sha = crypto.createHash('sha256').update(buf).digest('hex');
-          const realName = decodeName(f.originalname);
-
-          const ins = await run(
-            'INSERT INTO files (task_id, uploader_id, original_name, stored_name, mime, size, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [taskId, req.user.id, realName, f.filename, f.mimetype, f.size, sha]
-          );
-
-          inserted.push({ id: ins.lastID, name: realName, size: f.size });
-        }
-
-        audit(req.user.id, req.user.username, 'file_upload', 'file', inserted[0].id, 'count=' + inserted.length + ' task=' + taskId);
-        res.json({ files: inserted });
-      } catch (e) {
+      if (rawTaskId === null || rawTaskId === '') {
         cleanup();
-        console.error('file upload db', e);
-        res.status(500).json({ error: e.message || 'Server error' });
+        return res.status(400).json({ error: 'task_id required' });
       }
-    });
-  } catch (e) {
-    console.error('file upload guard', e);
-    res.status(500).json({ error: e.message || 'Server error' });
-  }
+
+      const taskId = parseInt(rawTaskId, 10);
+      if (isNaN(taskId)) {
+        cleanup();
+        return res.status(400).json({ error: 'Invalid task_id' });
+      }
+
+      const task = await getActiveTask(taskId);
+      if (!task) {
+        cleanup();
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      const allowed = await canAccessTask(task, req.user);
+      if (!allowed) {
+        cleanup();
+        audit(req.user.id, req.user.username, 'file_upload_denied', 'file', null, 'task_access');
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      if (files.length === 0) {
+        return res.status(400).json({ error: 'No files' });
+      }
+
+      for (const f of files) {
+        const ext = path.extname(decodeName(f.originalname) || '').toLowerCase();
+        const ok = await up.verifyMagic(f.path, ext);
+        if (!ok) {
+          cleanup();
+          return res.status(400).json({ error: 'File content does not match extension' });
+        }
+      }
+
+      const inserted = [];
+
+      for (const f of files) {
+        const buf = await fs.promises.readFile(f.path);
+        const sha = crypto.createHash('sha256').update(buf).digest('hex');
+        const realName = decodeName(f.originalname);
+
+        const ins = await run(
+          'INSERT INTO files (task_id, uploader_id, original_name, stored_name, mime, size, sha256) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [taskId, req.user.id, realName, f.filename, f.mimetype, f.size, sha]
+        );
+
+        inserted.push({ id: ins.lastID, name: realName, size: f.size });
+      }
+
+      audit(
+        req.user.id,
+        req.user.username,
+        'file_upload',
+        'file',
+        inserted[0].id,
+        'count=' + inserted.length + ' task=' + taskId
+      );
+
+      res.json({ files: inserted });
+    } catch (e) {
+      cleanup();
+      console.error('file upload', e);
+      res.status(500).json({ error: e.message || 'Server error' });
+    }
+  });
 });
 
 router.get('/', auth, async (req, res) => {
@@ -175,6 +199,7 @@ router.get('/:id/download', auth, async (req, res) => {
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     let allowed = false;
+
     if (req.user.role === 'admin') {
       allowed = true;
     } else if (file.task_id && file.task_deleted === 0) {
