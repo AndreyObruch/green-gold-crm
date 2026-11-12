@@ -1,0 +1,72 @@
+﻿=== TASK ===
+field,value
+id,5
+title,Тестовая задача
+description,как-то так
+status,new
+deleted,no
+creator_username,Андрей
+created_at,2026-11-11 17:36:45
+legacy_assignee_id,3
+assignee_usernames,"Алеся, Матвей"
+messages_count,5
+files_count,7
+last_activity,2026-11-11 19:13:11
+
+=== ASSIGNEES ===
+user_id,username,role,assigned_at,assigned_by
+4,Алеся,executor,2026-11-11 17:36:45,Андрей
+3,Матвей,executor,2026-11-11 17:36:45,Андрей
+
+=== MESSAGES ===
+id,created_at,author_username,body,file_ids,file_names
+6,2026-11-11 17:37:26,Андрей,салют,,
+7,2026-11-11 17:38:48,Матвей,"Привет, Андрей.",,
+18,2026-11-11 18:59:04,Андрей,Проверка закрепа,"14, 15, 16",dossier.md | dossier.md | 2026-10-19 2-х дневный семинар Сумма технологииСанкт-Петербург 2425 окт.xlsx
+19,2026-11-11 19:01:35,Андрей,,"17, 18",Интеллектуальный склад_Обруч Андрей Геннадьевич_ИАР.pdf | Технологическая зрелость2.png
+20,2026-11-11 19:13:11,Андрей,,20,hero.jpg
+
+=== FILES ===
+id,original_name,size_readable,mime,uploader_username,created_at,attached_message_ids
+14,dossier.md,21 KB,text/markdown,Андрей,2026-11-11 18:57:15,18
+15,dossier.md,21 KB,text/markdown,Андрей,2026-11-11 18:58:28,18
+16,2026-10-19 2-х дневный семинар Сумма технологииСанкт-Петербург 2425 окт.xlsx,7 KB,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,Андрей,2026-11-11 18:58:56,18
+17,Интеллектуальный склад_Обруч Андрей Геннадьевич_ИАР.pdf,2.22 MB,application/pdf,Андрей,2026-11-11 19:00:33,19
+18,Технологическая зрелость2.png,1.70 MB,image/png,Андрей,2026-11-11 19:00:55,19
+19,manifest-bg.jpg,5.00 MB,image/jpeg,Андрей,2026-11-11 19:12:48,
+20,hero.jpg,1.68 MB,image/jpeg,Андрей,2026-11-11 19:13:09,20
+
+=== AUDIT ===
+id,created_at,actor,action,entity,entity_id,detail
+50,2026-11-11 17:36:46,Андрей,task_create,task,5,"assignees=3,4"
+51,2026-11-11 17:37:26,Андрей,message_post,message,6,task=5
+54,2026-11-11 17:38:48,Матвей,message_post,message,7,task=5
+79,2026-11-11 18:57:15,Андрей,file_upload,file,14,count=1 task=5
+80,2026-11-11 18:58:29,Андрей,file_upload,file,15,count=1 task=5
+81,2026-11-11 18:58:56,Андрей,file_upload,file,16,count=1 task=5
+82,2026-11-11 18:59:04,Андрей,message_post,message,18,task=5 files=3
+83,2026-11-11 19:00:33,Андрей,file_upload,file,17,count=1 task=5
+84,2026-11-11 19:00:55,Андрей,file_upload,file,18,count=1 task=5
+85,2026-11-11 19:01:35,Андрей,message_post,message,19,task=5 files=2
+87,2026-11-11 19:12:48,Андрей,file_upload,file,19,count=1 task=5
+88,2026-11-11 19:13:09,Андрей,file_upload,file,20,count=1 task=5
+89,2026-11-11 19:13:11,Андрей,message_post,message,20,task=5 files=1
+
+=== TIMELINE ===
+time,actor,action,object,details
+2026-11-11 17:36:45,Андрей,assigned,user #4 Алеся,task #5 role=executor
+2026-11-11 17:36:45,Андрей,assigned,user #3 Матвей,task #5 role=executor
+2026-11-11 17:36:46,Андрей,task_create,task #5,"assignees=3,4 | title=Тестовая задача status=new archived=no"
+2026-11-11 17:37:26,Андрей,message_post,message #6,task=5 | body=салют
+2026-11-11 17:38:48,Матвей,message_post,message #7,"task=5 | body=Привет, Андрей."
+2026-11-11 18:57:15,Андрей,file_upload,file #14,count=1 task=5 | name=dossier.md size=21 KB
+2026-11-11 18:58:29,Андрей,file_upload,file #15,count=1 task=5 | name=dossier.md size=21 KB
+2026-11-11 18:58:56,Андрей,file_upload,file #16,count=1 task=5 | name=2026-10-19 2-х дневный семинар Сумма технологииСанкт-Петербург 2425 окт.xlsx size=7 KB
+2026-11-11 18:59:04,Андрей,message_post,message #18,task=5 files=3 | body=Проверка закрепа files=dossier.md | dossier.md | 2026-10-19 2-х дневный семинар Сумма технологииСанкт-Петербург 2425 окт.xlsx
+2026-11-11 19:00:33,Андрей,file_upload,file #17,count=1 task=5 | name=Интеллектуальный склад_Обруч Андрей Геннадьевич_ИАР.pdf size=2.22 MB
+2026-11-11 19:00:55,Андрей,file_upload,file #18,count=1 task=5 | name=Технологическая зрелость2.png size=1.70 MB
+2026-11-11 19:01:35,Андрей,message_post,message #19,task=5 files=2 | body= files=Интеллектуальный склад_Обруч Андрей Геннадьевич_ИАР.pdf | Технологическая зрелость2.png
+2026-11-11 19:12:48,Андрей,file_upload,file #19,count=1 task=5 | name=manifest-bg.jpg size=5.00 MB
+2026-11-11 19:13:09,Андрей,file_upload,file #20,count=1 task=5 | name=hero.jpg size=1.68 MB
+2026-11-11 19:13:11,Андрей,message_post,message #20,task=5 files=1 | body= files=hero.jpg
+

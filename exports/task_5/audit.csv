@@ -1,0 +1,14 @@
+﻿id,created_at,actor,action,entity,entity_id,detail
+50,2026-11-11 17:36:46,Андрей,task_create,task,5,"assignees=3,4"
+51,2026-11-11 17:37:26,Андрей,message_post,message,6,task=5
+54,2026-11-11 17:38:48,Матвей,message_post,message,7,task=5
+79,2026-11-11 18:57:15,Андрей,file_upload,file,14,count=1 task=5
+80,2026-11-11 18:58:29,Андрей,file_upload,file,15,count=1 task=5
+81,2026-11-11 18:58:56,Андрей,file_upload,file,16,count=1 task=5
+82,2026-11-11 18:59:04,Андрей,message_post,message,18,task=5 files=3
+83,2026-11-11 19:00:33,Андрей,file_upload,file,17,count=1 task=5
+84,2026-11-11 19:00:55,Андрей,file_upload,file,18,count=1 task=5
+85,2026-11-11 19:01:35,Андрей,message_post,message,19,task=5 files=2
+87,2026-11-11 19:12:48,Андрей,file_upload,file,19,count=1 task=5
+88,2026-11-11 19:13:09,Андрей,file_upload,file,20,count=1 task=5
+89,2026-11-11 19:13:11,Андрей,message_post,message,20,task=5 files=1
