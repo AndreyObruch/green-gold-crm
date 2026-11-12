@@ -1,0 +1,93 @@
+﻿id,user_id,username,action,entity,entity_id,detail,created_at
+1,1,Андрей,login,user,1,ok,2026-11-10 19:46:05
+2,2,Вячеслав,login,user,2,ok,2026-11-10 19:58:10
+3,2,Вячеслав,login,user,2,ok,2026-11-10 20:00:06
+4,1,Андрей,login,user,1,ok,2026-11-11 12:58:55
+5,1,Андрей,file_upload,file,1,count=1 task=1,2026-11-11 12:58:55
+6,1,Андрей,file_download,file,1,probe.txt,2026-11-11 12:58:55
+7,4,Алеся,login,user,4,ok,2026-11-11 12:58:56
+8,4,Алеся,file_upload_denied,file,,task_access,2026-11-11 12:58:56
+9,1,Андрей,login,user,1,ok,2026-11-11 13:39:02
+10,1,Андрей,task_update,task,1,status=in_progress,2026-11-11 13:39:02
+11,3,Матвей,login,user,3,ok,2026-11-11 13:39:02
+12,3,Матвей,task_update_denied,task,2,not_owner,2026-11-11 13:39:02
+13,1,Андрей,login,user,1,ok,2026-11-11 13:46:47
+14,1,Андрей,task_update,task,1,status=in_progress title description,2026-11-11 13:46:47
+15,3,Матвей,login,user,3,ok,2026-11-11 13:46:48
+16,3,Матвей,task_update_denied,task,2,not_owner,2026-11-11 13:46:48
+17,1,Андрей,login,user,1,ok,2026-11-11 13:48:05
+18,3,Матвей,login,user,3,ok,2026-11-11 14:17:43
+19,1,Андрей,login,user,1,ok,2026-11-11 14:25:52
+20,1,Андрей,login,user,1,ok,2026-11-11 14:32:28
+21,1,Андрей,task_create,task,4,Доступ к конструктору.,2026-11-11 14:35:39
+22,1,Андрей,file_upload,file,2,count=1 task=4,2026-11-11 14:35:40
+23,1,Андрей,file_download,file,2,ÑÐ¸ÑÐ¾Ð½ÑÐ¸Ð´ÐºÐ°.png,2026-11-11 14:35:58
+24,2,Вячеслав,login,user,2,ok,2026-11-11 14:41:33
+25,2,Вячеслав,file_download,file,2,ÑÐ¸ÑÐ¾Ð½ÑÐ¸Ð´ÐºÐ°.png,2026-11-11 14:41:52
+26,2,Вячеслав,task_update,task,4,status=in_progress,2026-11-11 14:43:14
+27,2,Вячеслав,file_download,file,2,ÑÐ¸ÑÐ¾Ð½ÑÐ¸Ð´ÐºÐ°.png,2026-11-11 14:43:22
+28,2,Вячеслав,task_update,task,4,status=in_progress assignee=2 title description,2026-11-11 14:48:00
+29,2,Вячеслав,file_download,file,1,probe.txt,2026-11-11 14:48:21
+30,1,Андрей,login,user,1,ok,2026-11-11 15:11:12
+31,1,,message_post,message,1,task=1,2026-11-11 15:12:21
+32,3,Матвей,login,user,3,ok,2026-11-11 15:13:26
+33,3,Матвей,file_download,file,1,probe.txt,2026-11-11 15:13:52
+34,3,,message_post,message,2,task=1,2026-11-11 15:14:47
+35,3,Матвей,file_upload,file,3,count=1 task=1,2026-11-11 15:14:57
+36,3,,message_post,message,3,task=1,2026-11-11 15:14:57
+37,1,Андрей,file_download,file,3,ÑÐ¸ÑÐ¾Ð½ÑÐ¸Ð´ÐºÐ°.png,2026-11-11 15:15:42
+38,1,,message_post,message,4,task=1,2026-11-11 15:16:58
+39,1,Андрей,login,user,1,ok,2026-11-11 15:21:55
+40,1,Андрей,login,user,1,ok,2026-11-11 15:38:19
+41,1,Андрей,file_upload,file,4,count=1 task=4,2026-11-11 15:38:40
+42,1,,message_post,message,5,task=4,2026-11-11 15:38:40
+43,1,Андрей,login,user,1,ok,2026-11-11 15:55:49
+44,1,Андрей,login,user,1,ok,2026-11-11 16:12:03
+45,1,Андрей,task_delete,task,4,soft,2026-11-11 16:12:45
+46,1,Андрей,task_restore,task,4,ok,2026-11-11 16:12:50
+47,1,Андрей,task_update,task,3,status=in_progress,2026-11-11 16:13:31
+48,1,Андрей,task_delete,task,3,soft,2026-11-11 16:13:55
+49,1,Андрей,login,user,1,ok,2026-11-11 17:35:49
+50,1,Андрей,task_create,task,5,"assignees=3,4",2026-11-11 17:36:46
+51,1,Андрей,message_post,message,6,task=5,2026-11-11 17:37:26
+52,4,Алеся,login,user,4,ok,2026-11-11 17:37:52
+53,3,Матвей,login,user,3,ok,2026-11-11 17:38:19
+54,3,Матвей,message_post,message,7,task=5,2026-11-11 17:38:48
+55,2,Вячеслав,login,user,2,ok,2026-11-11 17:39:11
+56,1,Андрей,login,user,1,ok,2026-11-11 17:46:39
+57,1,Андрей,message_post,message,8,task=4,2026-11-11 17:49:00
+58,1,Андрей,login,user,1,ok,2026-11-11 17:56:16
+59,1,Андрей,file_upload,file,5,count=1 task=4,2026-11-11 17:56:36
+60,1,Андрей,message_post,message,9,task=4,2026-11-11 17:56:36
+61,1,Андрей,file_upload,file,6,count=1 task=4,2026-11-11 17:58:54
+62,1,Андрей,message_post,message,10,task=4,2026-11-11 17:58:54
+63,1,Андрей,file_upload,file,7,count=1 task=4,2026-11-11 17:59:12
+64,1,Андрей,message_post,message,11,task=4,2026-11-11 17:59:12
+65,1,Андрей,file_upload,file,8,count=1 task=4,2026-11-11 17:59:35
+66,1,Андрей,message_post,message,12,task=4,2026-11-11 17:59:35
+67,1,Андрей,file_upload,file,9,count=1 task=4,2026-11-11 17:59:50
+68,1,Андрей,message_post,message,13,task=4,2026-11-11 17:59:51
+69,1,Андрей,login,user,1,ok,2026-11-11 18:40:41
+70,1,Андрей,file_upload,file,10,count=1 task=4,2026-11-11 18:41:26
+71,1,Андрей,message_post,message,14,task=4 files=1,2026-11-11 18:41:26
+72,1,Андрей,file_upload,file,11,count=1 task=4,2026-11-11 18:43:03
+73,1,Андрей,message_post,message,15,task=4 files=1,2026-11-11 18:43:03
+74,1,Андрей,file_upload,file,12,count=1 task=4,2026-11-11 18:44:24
+75,1,Андрей,message_post,message,16,task=4 files=1,2026-11-11 18:44:24
+76,1,Андрей,file_upload,file,13,count=1 task=4,2026-11-11 18:44:40
+77,1,Андрей,message_post,message,17,task=4 files=1,2026-11-11 18:44:40
+78,1,Андрей,login,user,1,ok,2026-11-11 18:55:44
+79,1,Андрей,file_upload,file,14,count=1 task=5,2026-11-11 18:57:15
+80,1,Андрей,file_upload,file,15,count=1 task=5,2026-11-11 18:58:29
+81,1,Андрей,file_upload,file,16,count=1 task=5,2026-11-11 18:58:56
+82,1,Андрей,message_post,message,18,task=5 files=3,2026-11-11 18:59:04
+83,1,Андрей,file_upload,file,17,count=1 task=5,2026-11-11 19:00:33
+84,1,Андрей,file_upload,file,18,count=1 task=5,2026-11-11 19:00:55
+85,1,Андрей,message_post,message,19,task=5 files=2,2026-11-11 19:01:35
+86,1,Андрей,login,user,1,ok,2026-11-11 19:12:11
+87,1,Андрей,file_upload,file,19,count=1 task=5,2026-11-11 19:12:48
+88,1,Андрей,file_upload,file,20,count=1 task=5,2026-11-11 19:13:09
+89,1,Андрей,message_post,message,20,task=5 files=1,2026-11-11 19:13:11
+90,1,Андрей,login,user,1,ok,2026-11-12 05:46:24
+91,1,Андрей,login,user,1,ok,2026-11-12 06:40:57
+92,1,Андрей,login,user,1,ok,2026-11-12 06:53:12

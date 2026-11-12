@@ -1,0 +1,6 @@
+﻿id,username,password_hash,role
+1,Андрей,$2b$10$ashX0gN8wGz1hmKnHoydROvB8ztyNqcUnEs07rt9Z5Ir.TlMCdtQy,admin
+2,Вячеслав,$2b$10$Vu.crt3K.dvbf0xWVPA5Gej.IXYRRiTv8nk9BllroIocTASZR2MoK,admin
+3,Матвей,$2b$10$Ez60blrR7cCZH5dzVH85mei6f6/l6vKLfXWIOqV3/hkWbJC/Xa90W,executor
+4,Алеся,$2b$10$3igWpPxn2Z00ef45qiZ0ouYyh1ANYElgFEObJUx/bq1hzl6RylMiK,executor
+5,admin,$2b$10$XQ5Z5Z5Z5Z5Z5Z5Z5Z5Z5O,admin

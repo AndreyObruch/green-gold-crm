@@ -1,0 +1,6 @@
+﻿id,title,description,status,deleted,creator_username,assignee_usernames,messages_count,files_count
+1,Обновлено зондом,новое описание,in_progress,0,Андрей,Матвей,4,2
+2,Склад,,in_progress,0,Андрей,Алеся,0,0
+3,Звонок,,in_progress,1,Вячеслав,Матвей,0,0
+4,Доступ к конструктору.,Прислать Андрею доступ к конструктору Green Gold,in_progress,0,Андрей,Вячеслав,11,11
+5,Тестовая задача,как-то так,new,0,Андрей,"Матвей, Алеся",5,7
