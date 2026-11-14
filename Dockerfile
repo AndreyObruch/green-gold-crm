@@ -12,4 +12,6 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Запуск миграции при старте контейнера (опционально, лучше делать отдельно)
+# CMD ["sh", "-c", "node db/pg-migrate.js && node server-pg.js"]
+CMD ["node", "server-pg.js"]

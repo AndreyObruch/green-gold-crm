@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    ports:
+      - "80:3000"
+    env_file:
+      - .env.production # Локально для теста, на Amvera переменные задаются в UI
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: green_gold
+      POSTGRES_PASSWORD: secure_password_change_me
+      POSTGRES_DB: crm_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  pgdata:
