@@ -1,0 +1,14 @@
+node_modules
+.git
+.env
+db/crm.db
+uploads/*
+!uploads/.gitkeep
+exports
+tailscale-setup.ps1
+inspect-db.js
+export-db-csv.js
+inspect-task.js
+export-task-csv.js
+SECURITY.md
+DOSSIER.md
