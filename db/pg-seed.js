@@ -2,30 +2,32 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('./pg-db');
 
 async function seed() {
-  // Validate secrets BEFORE touching data, so a missing env cannot TRUNCATE the DB.
-  const passAndrey = process.env.SEED_PASS_ANDREY;
-  const passVyacheslav = process.env.SEED_PASS_VYACHESLAV;
-  const passMatvey = process.env.SEED_PASS_MATVEY;
-  const passAlesya = process.env.SEED_PASS_ALESYA;
-  const missing = [];
-  if (!passAndrey) missing.push('SEED_PASS_ANDREY');
-  if (!passVyacheslav) missing.push('SEED_PASS_VYACHESLAV');
-  if (!passMatvey) missing.push('SEED_PASS_MATVEY');
-  if (!passAlesya) missing.push('SEED_PASS_ALESYA');
-  if (missing.length > 0) {
-    console.error('Seed aborted, missing env vars: ' + missing.join(', '));
-    process.exitCode = 1;
-    await pool.end();
-    return;
-  }
-
   const client = await pool.connect();
   try {
+    const chk = await client.query('SELECT COUNT(*)::int AS c FROM users');
+    if (chk.rows[0].c > 0) {
+      console.log('Seed skipped: users already present.');
+      return;
+    }
+
+    const passAndrey = process.env.SEED_PASS_ANDREY;
+    const passVyacheslav = process.env.SEED_PASS_VYACHESLAV;
+    const passMatvey = process.env.SEED_PASS_MATVEY;
+    const passAlesya = process.env.SEED_PASS_ALESYA;
+    const missing = [];
+    if (!passAndrey) missing.push('SEED_PASS_ANDREY');
+    if (!passVyacheslav) missing.push('SEED_PASS_VYACHESLAV');
+    if (!passMatvey) missing.push('SEED_PASS_MATVEY');
+    if (!passAlesya) missing.push('SEED_PASS_ALESYA');
+    if (missing.length > 0) {
+      console.error('Seed aborted, missing env vars: ' + missing.join(', '));
+      process.exitCode = 1;
+      return;
+    }
+
     console.log('Seeding PostgreSQL...');
-    // Clear existing data (be careful in production)
     await client.query('TRUNCATE audit_log, message_files, files, messages, task_assignees, tasks, users RESTART IDENTITY CASCADE;');
 
-    // Insert Users (passwords come from environment, never from source control)
     const saltRounds = 10;
     const users = [
       { username: 'Andrey', password: passAndrey, role: 'admin' },
@@ -41,12 +43,10 @@ async function seed() {
       );
     }
 
-    // Get IDs
     const andreyId = (await client.query("SELECT id FROM users WHERE username='Andrey'")).rows[0].id;
     const matveyId = (await client.query("SELECT id FROM users WHERE username='Matvey'")).rows[0].id;
     const alesyaId = (await client.query("SELECT id FROM users WHERE username='Alesya'")).rows[0].id;
 
-    // Insert Tasks
     const tasks = [
       { title: 'Updated probe', description: 'New description', status: 'in_progress', creator_id: andreyId, assignees: [matveyId] },
       { title: 'Warehouse', description: null, status: 'in_progress', creator_id: andreyId, assignees: [alesyaId] },
