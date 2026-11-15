@@ -1,7 +1,7 @@
 {
   "name": "green-gold-crm",
   "version": "1.0.0",
-  "description": "",
+  "description": "Green Gold CRM backend",
   "main": "server-pg.js",
   "scripts": {
     "start": "node server-pg.js",
