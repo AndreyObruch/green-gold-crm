@@ -1,7 +1,10 @@
 node_modules/
 .env
-*.log
-db/*.db
-db/*.db-journal
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-error.log*
 .DS_Store
 Thumbs.db
+desktop.ini
+/data/
