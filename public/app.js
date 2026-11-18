@@ -7,6 +7,7 @@ let dragId = null;
 let chatTimer = null, chatTaskId = null;
 let chatDraftFiles = [];
 let menuTaskId = null, renameTaskId = null;
+let lastMessages = [], editingMsgId = null, editingDraft = '';
 
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -105,6 +106,7 @@ function logout() {
   stopPolling();
   closeModals();
   chatDraftFiles = [];
+  lastMessages = []; editingMsgId = null; editingDraft = '';
   localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
   token = null; role = null; me = null;
   allTasks = []; usersCache = []; selected.clear();
@@ -353,6 +355,14 @@ function injectModalStyles() {
     '.gg-gold{background:linear-gradient(135deg,#f2b632,#d99a1b);color:#20160a;box-shadow:0 6px 18px rgba(242,182,50,.28)}' +
     '.gg-green{background:linear-gradient(135deg,#35d07f,#1fa860);color:#04160c;box-shadow:0 6px 18px rgba(53,208,127,.25)}' +
     '.gg-ghost{background:transparent;border-color:rgba(159,184,164,.4);color:#9fb8a4}' +
+    '.chat-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}' +
+    '.gg-msg-acts{margin-left:auto;display:flex;gap:6px}' +
+    '.gg-msg-act{padding:2px 8px;border-radius:8px;border:1px solid rgba(159,184,164,.35);background:transparent;color:#9fb8a4;font-size:.72rem;cursor:pointer;transition:filter .12s ease,border-color .12s ease,color .12s ease}' +
+    '.gg-msg-act:hover{filter:brightness(1.25);border-color:#f2b632;color:#f2b632}' +
+    '.gg-msg-act.danger:hover{border-color:#ff5d5d;color:#ff5d5d}' +
+    '.gg-msg-edit{margin:6px 0}' +
+    '.gg-msg-edit textarea{width:100%;box-sizing:border-box;min-height:64px;padding:8px 10px;border-radius:10px;border:1px solid rgba(242,182,50,.5);background:#0c1f15;color:#eaf6e6;font:inherit;outline:none}' +
+    '.gg-msg-edit-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}' +
     '@keyframes gg-pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}' +
     '@media (prefers-reduced-motion:reduce){.gg-dialog{animation:none}.gg-btn{transition:none}}';
   document.head.appendChild(st);
@@ -546,6 +556,7 @@ function openDrawer(id) {
   const t = allTasks.find(x => x.id === id);
   if (!t || t.id < 0) return;
   chatDraftFiles = [];
+  editingMsgId = null; editingDraft = '';
   const dr = document.getElementById('drawer');
   const ov = document.getElementById('drawer-overlay');
   let edit = '';
@@ -593,6 +604,7 @@ function openDrawer(id) {
 function closeDrawer() {
   stopPolling();
   chatDraftFiles = [];
+  lastMessages = []; editingMsgId = null; editingDraft = '';
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
 }
@@ -609,6 +621,49 @@ function stopPolling() {
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
   chatTaskId = null;
 }
+function renderChat(msgs) {
+  const box = document.getElementById('chat-box');
+  if (!box) return;
+  const uid = getUserId();
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  let caret = null;
+  const active = document.activeElement;
+  if (active && active.matches && active.matches('textarea[data-edit-input]')) {
+    caret = { s: active.selectionStart, e: active.selectionEnd };
+  }
+  box.innerHTML = (Array.isArray(msgs) ? msgs : []).map(m => {
+    const mine = m.user_id === uid ? ' mine' : '';
+    const canEdit = role === 'admin';
+    const canDel = role === 'admin' || m.user_id === uid;
+    const acts = (canEdit || canDel) ? '<span class="gg-msg-acts">' +
+      (canEdit ? '<button type="button" class="gg-msg-act" data-act="msg-edit" data-id="' + m.id + '">Правка</button>' : '') +
+      (canDel ? '<button type="button" class="gg-msg-act danger" data-act="msg-del" data-id="' + m.id + '">Удалить</button>' : '') +
+      '</span>' : '';
+    const head = '<div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b> <small>' + fmtDate(m.created_at) + '</small>' + acts + '</div>';
+    let bodyHtml;
+    if (editingMsgId === m.id) {
+      bodyHtml = '<div class="gg-msg-edit"><textarea data-edit-input="' + m.id + '">' + escapeHtml(editingDraft) + '</textarea>' +
+        '<div class="gg-msg-edit-acts"><button type="button" class="gg-msg-act" data-act="msg-cancel">Отмена</button>' +
+        '<button type="button" class="gg-msg-act" data-act="msg-save" data-id="' + m.id + '">Сохранить</button></div></div>';
+    } else {
+      bodyHtml = m.body ? '<div class="chat-body">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>' : '';
+    }
+    const filesArr = Array.isArray(m.files) ? m.files : (m.file_id ? [{ id: m.file_id, original_name: m.file_name, size: m.file_size }] : []);
+    const fileHtml = filesArr.length ? '<div class="task-actions">' + filesArr.map(f =>
+      '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name || 'file') + '">\u{1F4CE} ' + escapeHtml(f.original_name || 'file') + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)</button>'
+    ).join('') + '</div>' : '';
+    return '<div class="chat-msg' + mine + '">' + head + bodyHtml + fileHtml + '</div>';
+  }).join('') || '<div class="small-note">Сообщений пока нет</div>';
+  if (editingMsgId !== null) {
+    const ta = box.querySelector('textarea[data-edit-input]');
+    if (ta) {
+      ta.focus();
+      if (caret) ta.setSelectionRange(caret.s, caret.e);
+      else ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+  if (nearBottom) box.scrollTop = box.scrollHeight;
+}
 async function loadChat(taskId) {
   const box = document.getElementById('chat-box');
   if (!box) return;
@@ -616,18 +671,58 @@ async function loadChat(taskId) {
     const r = await fetch(API + '/messages?task_id=' + taskId);
     if (!r.ok) return;
     const msgs = await r.json();
-    const uid = getUserId();
-    box.innerHTML = (Array.isArray(msgs) ? msgs : []).map(m => {
-      const mine = m.user_id === uid ? ' mine' : '';
-      const body = m.body ? '<div class="chat-body">' + escapeHtml(m.body).replace(/\n/g, '<br>') + '</div>' : '';
-      const filesArr = Array.isArray(m.files) ? m.files : (m.file_id ? [{ id: m.file_id, original_name: m.file_name, size: m.file_size }] : []);
-      const fileHtml = filesArr.length ? '<div class="task-actions">' + filesArr.map(f =>
-        '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name || 'file') + '">\u{1F4CE} ' + escapeHtml(f.original_name || 'file') + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)</button>'
-      ).join('') + '</div>' : '';
-      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b> <small>' + fmtDate(m.created_at) + '</small></div>' + body + fileHtml + '</div>';
-    }).join('');
-    box.scrollTop = box.scrollHeight;
+    lastMessages = Array.isArray(msgs) ? msgs : [];
+    renderChat(lastMessages);
   } catch (e) { console.error('loadChat', e); }
+}
+function startEditMessage(id) {
+  const m = lastMessages.find(x => x.id === id);
+  if (!m) return;
+  editingMsgId = id;
+  editingDraft = m.body || '';
+  renderChat(lastMessages);
+}
+function cancelEditMessage() {
+  editingMsgId = null; editingDraft = '';
+  renderChat(lastMessages);
+}
+async function saveEditMessage(id) {
+  const val = editingDraft.trim();
+  if (!val) { alert('Сообщение не может быть пустым'); return; }
+  try {
+    const r = await fetch(API + '/messages/' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: val })
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      alert(d.error || 'Не удалось сохранить сообщение');
+      return;
+    }
+    editingMsgId = null; editingDraft = '';
+    if (chatTaskId) loadChat(chatTaskId);
+    showToast('Сообщение изменено');
+  } catch (e) { console.error('saveEditMessage', e); }
+}
+async function deleteMessage(id) {
+  if (!confirm('Удалить сообщение? Это действие необратимо.')) return;
+  const prev = lastMessages.slice();
+  lastMessages = lastMessages.filter(m => m.id !== id);
+  if (editingMsgId === id) { editingMsgId = null; editingDraft = ''; }
+  renderChat(lastMessages);
+  try {
+    const r = await fetch(API + '/messages/' + id, { method: 'DELETE' });
+    if (!r.ok) {
+      lastMessages = prev; renderChat(prev);
+      const d = await r.json().catch(() => ({}));
+      alert(d.error || 'Не удалось удалить сообщение');
+      return;
+    }
+    showToast('Сообщение удалено');
+  } catch (e) {
+    lastMessages = prev; renderChat(prev);
+    console.error('deleteMessage', e);
+  }
 }
 async function postMessage(taskId, body, fileIds) {
   try {
@@ -685,7 +780,7 @@ async function handleChatFileSelect(inp) {
       return;
     }
     const data = await r.json();
-    const newFiles = (data.files || []).map(x => ({ id: x.id, name: x.name, size: x.size })).filter(f => f.id);
+    const newFiles = (data.files || []).map(x => ({ id: x.id, name: x.name || x.original_name, size: x.size })).filter(f => f.id);
     chatDraftFiles = chatDraftFiles.concat(newFiles);
     renderChatDraft();
     refreshDrawerFiles(taskId);
@@ -889,7 +984,19 @@ document.getElementById('drawer').addEventListener('change', e => {
   const inp = e.target.closest('#chat-file-input');
   if (inp) handleChatFileSelect(inp);
 });
+document.getElementById('drawer').addEventListener('input', e => {
+  const ta = e.target.closest('textarea[data-edit-input]');
+  if (ta) editingDraft = ta.value;
+});
 document.getElementById('drawer').addEventListener('click', e => {
+  const btnDel = e.target.closest('[data-act="msg-del"]');
+  if (btnDel) { deleteMessage(parseInt(btnDel.dataset.id, 10)); return; }
+  const btnEdit = e.target.closest('[data-act="msg-edit"]');
+  if (btnEdit) { startEditMessage(parseInt(btnEdit.dataset.id, 10)); return; }
+  const btnSave = e.target.closest('[data-act="msg-save"]');
+  if (btnSave) { saveEditMessage(parseInt(btnSave.dataset.id, 10)); return; }
+  const btnCancel = e.target.closest('[data-act="msg-cancel"]');
+  if (btnCancel) { cancelEditMessage(); return; }
   const dl = e.target.closest('button[data-act="download"]');
   if (dl) { downloadFile(dl.dataset.id, dl.dataset.name); return; }
   const rm = e.target.closest('[data-act="draft-remove"]');
