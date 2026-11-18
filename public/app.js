@@ -6,6 +6,8 @@ let currentView = 'all', searchTerm = '', filterStatus = 'all', sortBy = 'date_d
 let dragId = null;
 let chatTimer = null, chatTaskId = null;
 let chatDraftFiles = [];
+let menuTaskId = null, renameTaskId = null;
+
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -32,7 +34,7 @@ function assigneeLabel(t) {
   return Array.isArray(t.assignees) && t.assignees.length > 1 ? 'Исполнители' : 'Исполнитель';
 }
 const _rawFetch = window.fetch.bind(window);
-window.fetch = async function(url, opts) {
+window.fetch = async function (url, opts) {
   const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
   const liveToken = localStorage.getItem('token');
   if (!isAuth && liveToken) {
@@ -54,7 +56,7 @@ function activateTab(name) {
     const p = document.getElementById(TABS[k].panel);
     if (p) p.style.display = (k === name) ? 'block' : 'none';
   });
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name && name !== 'tasks'));
 }
 function switchTab(name) {
   activateTab(name);
@@ -69,7 +71,11 @@ function showDashboard() {
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
   const isAdmin = role === 'admin';
-  document.getElementById('nav-create').style.display = isAdmin ? '' : 'none';
+  const tb = document.querySelector('.nav-btn[data-tab="tasks"]');
+  if (tb) { tb.textContent = 'Создать задачу'; tb.style.display = isAdmin ? '' : 'none'; }
+  const cb = document.querySelector('.nav-btn[data-tab="create"]');
+  if (cb) cb.style.display = 'none';
+  document.getElementById('nav-create').style.display = 'none';
   document.getElementById('nav-archive').style.display = isAdmin ? '' : 'none';
   restoreUI();
   loadUsers();
@@ -85,7 +91,9 @@ async function login() {
     });
     const data = await res.json();
     if (res.ok) {
-      token = data.token; role = data.role; me = username;
+      token = data.token;
+      role = data.role || (data.user && data.user.role) || null;
+      me = username;
       localStorage.setItem('token', token);
       localStorage.setItem('role', role);
       localStorage.setItem('username', me);
@@ -95,6 +103,7 @@ async function login() {
 }
 function logout() {
   stopPolling();
+  closeModals();
   chatDraftFiles = [];
   localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('username');
   token = null; role = null; me = null;
@@ -159,7 +168,7 @@ function renderCustomViews() {
   customViews.forEach((v, i) => {
     const b = document.createElement('button');
     b.className = 'view-chip'; b.dataset.cview = i;
-    b.innerHTML = escapeHtml(v.name) + '  <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">\u00D7</span>';
+    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">\u00D7</span>';
     row.insertBefore(b, saveBtn);
   });
 }
@@ -214,7 +223,7 @@ function renderTasks() {
     const isTemp = t.id < 0;
     const badge = '<span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span>';
     const chk = (!isTemp && role === 'admin') ? '<input type="checkbox" class="task-check" data-id="' + t.id + '"' + (selected.has(t.id) ? ' checked' : '') + '>' : '';
-    const head = '<div class="task-head">' + chk + '<b class="task-title-text" data-act="open" data-id="' + t.id + '" style="cursor:pointer">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
+    const head = '<div class="task-head">' + chk + '<b class="task-title-text" data-act="open" data-id="' + t.id + '" style="cursor:pointer" title="Действия с задачей">' + escapeHtml(t.title) + '</b>' + badge + '</div>';
     const desc = (t.description && String(t.description).trim()) ? '<div class="task-desc">' + escapeHtml(String(t.description)).replace(/\n/g, '<br>') + '</div>' : '';
     const mp = [assigneeLabel(t) + ': ' + escapeHtml(assigneeNames(t))];
     if (t.creator_username) mp.push('Создал: ' + escapeHtml(t.creator_username));
@@ -229,9 +238,8 @@ function renderTasks() {
       ['new', 'in_progress'].forEach(s => {
         acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
       });
-      acts += '<button class="chip" data-act="open" data-id="' + t.id + '">\u0427\u0430\u0442</button> ';
+      acts += '<button class="chip" data-act="chat" data-id="' + t.id + '">\u0427\u0430\u0442</button> ';
       if (role === 'admin') {
-        acts += '<button class="chip chip-archive" data-act="archive" data-id="' + t.id + '">\u0410\u0440\u0445\u0438\u0432</button> ';
         acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>';
       }
       acts += '</div>';
@@ -294,18 +302,182 @@ async function downloadFile(id, name) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) { console.error('download', e); }
 }
+function csvEscape(v) {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (/[";\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function downloadTaskCsv(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  const header = ['ID', 'Название', 'Описание', 'Статус', 'Исполнители', 'Создал', 'Создана'];
+  const row = [t.id, t.title, t.description || '', statusLabel(t.status), assigneeNames(t), t.creator_username || '', fmtDate(t.created_at)];
+  const content = '\uFEFF' + [header, row].map(r => r.map(csvEscape).join(';')).join('\r\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'task_' + t.id + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('CSV сохранён: task_' + t.id + '.csv');
+}
+function injectModalStyles() {
+  if (document.getElementById('gg-modal-style')) return;
+  const st = document.createElement('style');
+  st.id = 'gg-modal-style';
+  st.textContent =
+    '*{scrollbar-width:thin;scrollbar-color:#2c4a35 #0c1a12}' +
+    '*::-webkit-scrollbar{width:10px;height:10px}' +
+    '*::-webkit-scrollbar-track{background:#0c1a12}' +
+    '*::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#2c4a35,#1d3527);border-radius:8px;border:2px solid #0c1a12}' +
+    '*::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#f2b632,#35d07f)}' +
+    '.gg-scrim{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,12,8,.74);backdrop-filter:blur(6px)}' +
+    '.gg-scrim.open{display:flex}' +
+    '.gg-dialog{display:none;width:min(560px,94vw);max-height:86vh;overflow:auto;padding:22px 22px 18px;border-radius:16px;border:1px solid rgba(242,182,50,.38);background:linear-gradient(160deg,#132b1d 0%,#0b1a12 70%);box-shadow:0 24px 70px rgba(0,0,0,.6),0 0 0 1px rgba(53,208,127,.12) inset;color:#eaf6e6;animation:gg-pop .18s ease-out}' +
+    '.gg-dialog h3{margin:0 0 6px;color:#f2b632;font-size:1.15rem;letter-spacing:.02em}' +
+    '.gg-sub{margin:0 0 14px;color:#9fb8a4;font-size:.85rem}' +
+    '.gg-field{margin:0 0 12px}' +
+    '.gg-field label{display:block;margin:0 0 5px;color:#9fb8a4;font-size:.8rem}' +
+    '.gg-field input[type=text],.gg-field textarea,.gg-field select{width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(53,208,127,.35);background:#0c1f15;color:#eaf6e6;font:inherit;outline:none}' +
+    '.gg-field input[type=file]{width:100%;color:#9fb8a4;font-size:.8rem}' +
+    '.gg-field input:focus,.gg-field textarea:focus,.gg-field select:focus{border-color:#f2b632;box-shadow:0 0 0 3px rgba(242,182,50,.18)}' +
+    '.gg-field select option{background:#0c1f15;color:#eaf6e6;padding:4px}' +
+    '.gg-field select option:checked{background:linear-gradient(90deg,#1d3527,#2c4a35);color:#f2b632}' +
+    '.gg-menu-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}' +
+    '.gg-menu-row .gg-btn{flex:1 1 160px}' +
+    '.gg-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}' +
+    '.gg-btn{padding:9px 16px;border-radius:10px;border:1px solid transparent;font:inherit;font-weight:600;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease,filter .12s ease}' +
+    '.gg-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}' +
+    '.gg-btn:active{transform:translateY(0)}' +
+    '.gg-btn:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}' +
+    '.gg-gold{background:linear-gradient(135deg,#f2b632,#d99a1b);color:#20160a;box-shadow:0 6px 18px rgba(242,182,50,.28)}' +
+    '.gg-green{background:linear-gradient(135deg,#35d07f,#1fa860);color:#04160c;box-shadow:0 6px 18px rgba(53,208,127,.25)}' +
+    '.gg-ghost{background:transparent;border-color:rgba(159,184,164,.4);color:#9fb8a4}' +
+    '@keyframes gg-pop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}' +
+    '@media (prefers-reduced-motion:reduce){.gg-dialog{animation:none}.gg-btn{transition:none}}';
+  document.head.appendChild(st);
+}
+function ensureModals() {
+  if (document.getElementById('gg-scrim')) return;
+  injectModalStyles();
+  const scrim = document.createElement('div');
+  scrim.id = 'gg-scrim';
+  scrim.className = 'gg-scrim';
+  scrim.innerHTML =
+    '<div class="gg-dialog" id="gg-menu" role="dialog" aria-modal="true" aria-labelledby="gg-menu-title">' +
+    '<h3 id="gg-menu-title"></h3><p class="gg-sub" id="gg-menu-sub"></p>' +
+    '<div class="gg-menu-row"><button class="gg-btn gg-gold" id="gg-menu-rename">Изменить</button>' +
+    '<button class="gg-btn gg-green" id="gg-menu-csv">Скачать CSV</button></div>' +
+    '<div class="gg-foot"><button class="gg-btn gg-ghost" id="gg-menu-close">Закрыть</button></div></div>' +
+    '<div class="gg-dialog" id="gg-rename" role="dialog" aria-modal="true">' +
+    '<h3>Изменить название</h3>' +
+    '<div class="gg-field"><label for="gg-r-title">Название задачи</label><input type="text" id="gg-r-title" maxlength="200"></div>' +
+    '<div class="gg-foot"><button class="gg-btn gg-ghost" id="gg-r-cancel">Отмена</button>' +
+    '<button class="gg-btn gg-gold" id="gg-r-save">Сохранить</button></div></div>' +
+    '<div class="gg-dialog" id="gg-create" role="dialog" aria-modal="true">' +
+    '<h3>Создать задачу</h3>' +
+    '<div class="gg-field"><label for="gg-c-title">Название</label><input type="text" id="gg-c-title" maxlength="200" placeholder="Например: Подготовить отчёт по складу"></div>' +
+    '<div class="gg-field"><label for="gg-c-desc">Описание</label><textarea id="gg-c-desc" rows="4" placeholder="Что нужно сделать, критерии готовности..."></textarea></div>' +
+    '<div class="gg-field"><label for="gg-c-assignee">Исполнители (Ctrl/Cmd или Shift — несколько; админы тоже доступны)</label><select id="gg-c-assignee" multiple size="5"></select></div>' +
+    '<div class="gg-field"><label for="gg-c-files">Вложения (до 3 файлов, каждый до 10 МБ)</label><input type="file" id="gg-c-files" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md"></div>' +
+    '<div class="gg-foot"><button class="gg-btn gg-ghost" id="gg-c-cancel">Отмена</button>' +
+    '<button class="gg-btn gg-gold" id="gg-c-submit">Создать</button></div></div>';
+  document.body.appendChild(scrim);
+  scrim.addEventListener('click', e => { if (e.target === scrim) closeModals(); });
+  document.getElementById('gg-menu-close').addEventListener('click', closeModals);
+  document.getElementById('gg-menu-csv').addEventListener('click', () => { if (menuTaskId) downloadTaskCsv(menuTaskId); });
+  document.getElementById('gg-menu-rename').addEventListener('click', () => { if (menuTaskId) openRename(menuTaskId); });
+  document.getElementById('gg-r-cancel').addEventListener('click', () => { if (menuTaskId) openTaskMenu(menuTaskId); else closeModals(); });
+  document.getElementById('gg-r-save').addEventListener('click', () => { if (renameTaskId) saveRename(renameTaskId); });
+  document.getElementById('gg-c-cancel').addEventListener('click', closeModals);
+  document.getElementById('gg-c-submit').addEventListener('click', createTask);
+}
+function showDlg(id) {
+  ['gg-menu', 'gg-rename', 'gg-create'].forEach(d => {
+    const el = document.getElementById(d);
+    if (el) el.style.display = (d === id) ? 'block' : 'none';
+  });
+  document.getElementById('gg-scrim').classList.add('open');
+}
+function closeModals() {
+  const s = document.getElementById('gg-scrim');
+  if (s) s.classList.remove('open');
+  menuTaskId = null; renameTaskId = null;
+}
+function openTaskMenu(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t || t.id < 0) return;
+  ensureModals();
+  menuTaskId = id;
+  document.getElementById('gg-menu-title').textContent = t.title;
+  document.getElementById('gg-menu-sub').textContent = statusLabel(t.status) + ' \u00B7 ' + assigneeLabel(t) + ': ' + assigneeNames(t);
+  document.getElementById('gg-menu-rename').style.display = role === 'admin' ? '' : 'none';
+  showDlg('gg-menu');
+}
+function openRename(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  ensureModals();
+  renameTaskId = id;
+  const inp = document.getElementById('gg-r-title');
+  inp.value = t.title;
+  showDlg('gg-rename');
+  inp.focus(); inp.select();
+}
+async function saveRename(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  const val = document.getElementById('gg-r-title').value.trim();
+  if (!val) { alert('Название не может быть пустым'); return; }
+  const old = t.title;
+  t.title = val;
+  renderTasks();
+  closeModals();
+  try {
+    const r = await fetch(API + '/tasks/' + id, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: val })
+    });
+    if (!r.ok) {
+      t.title = old; renderTasks();
+      const d = await r.json().catch(() => ({}));
+      alert(d.error || 'Не удалось сохранить название');
+      return;
+    }
+    showToast('Название обновлено');
+  } catch (e) { t.title = old; renderTasks(); console.error('saveRename', e); }
+}
+function openCreate() {
+  if (role !== 'admin') return;
+  ensureModals();
+  const sel = document.getElementById('gg-c-assignee');
+  sel.innerHTML = '';
+  usersCache.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.username + ' (' + u.role + ')';
+    sel.appendChild(opt);
+  });
+  document.getElementById('gg-c-title').value = '';
+  document.getElementById('gg-c-desc').value = '';
+  document.getElementById('gg-c-files').value = '';
+  showDlg('gg-create');
+  document.getElementById('gg-c-title').focus();
+}
 async function createTask() {
-  const titleEl = document.getElementById('task-title');
-  const descEl = document.getElementById('task-desc');
-  const assigneeEl = document.getElementById('task-assignee');
-  const fileInput = document.getElementById('task-files');
-  const title = titleEl ? titleEl.value.trim() : '';
+  const titleEl = document.getElementById('gg-c-title');
+  const descEl = document.getElementById('gg-c-desc');
+  const assigneeEl = document.getElementById('gg-c-assignee');
+  const fileInput = document.getElementById('gg-c-files');
+  if (!titleEl) return;
+  const title = titleEl.value.trim();
   const description = descEl ? descEl.value : '';
   const ids = assigneeEl ? Array.from(assigneeEl.selectedOptions).map(o => parseInt(o.value, 10)).filter(n => Number.isInteger(n) && n > 0) : [];
   const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
   if (sel.length > 3) { alert('Максимум 3 файла за одну загрузку'); return; }
   for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
-  if (!title) { alert('Название обязательно'); return; }
+  if (!title) { alert('Название обязательно'); titleEl.focus(); return; }
+  closeModals();
   const tempId = -Date.now();
   const chosen = usersCache.filter(u => ids.indexOf(u.id) !== -1).map(u => ({ id: u.id, username: u.username }));
   allTasks.unshift({
@@ -345,9 +517,6 @@ async function createTask() {
         alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
       }
     }
-    if (titleEl) titleEl.value = '';
-    if (descEl) descEl.value = '';
-    if (fileInput) fileInput.value = '';
     renderTasks();
     showToast('Задача создана');
   } catch (e) {
@@ -370,7 +539,7 @@ function renderChatDraft() {
   if (!chatDraftFiles.length) { box.innerHTML = ''; return; }
   box.innerHTML = chatDraftFiles.map(f =>
     '<span class="chip">\u{1F4CE} ' + escapeHtml(f.name) + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)' +
-    '  <span data-act="draft-remove" data-fid="' + f.id + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430">\u00D7</span></span>'
+    ' <span data-act="draft-remove" data-fid="' + f.id + '" style="margin-left:6px;cursor:pointer" title="Убрать из черновика">\u00D7</span></span>'
   ).join('');
 }
 function openDrawer(id) {
@@ -409,11 +578,11 @@ function openDrawer(id) {
     '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' +
     '<div class="chat-section"><h4>Чат задачи</h4> <div class="chat-box" id="chat-box"></div>' +
-    '<div class="chat-form"><textarea id="chat-body" placeholder="\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435..."></textarea>' +
+    '<div class="chat-form"><textarea id="chat-body" placeholder="Сообщение..."></textarea>' +
     '<div id="chat-draft" class="chat-draft" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>' +
     '<input type="file" id="chat-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md" style="display:none">' +
-    '<div class="chat-actions"><button class="chip" data-act="attach-chat">\u{1F4CE} \u0424\u0430\u0439\u043B</button>' +
-    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C</button></div></div></div>' + edit;
+    '<div class="chat-actions"><button class="chip" data-act="attach-chat">\u{1F4CE} Файл</button>' +
+    '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">Отправить</button></div></div></div>' + edit;
   dr.classList.add('open'); ov.classList.add('open');
   const es = document.getElementById('edit-assignee');
   if (es) { es.multiple = true; es.size = Math.max(4, Math.min(8, usersCache.length || 1)); }
@@ -585,15 +754,12 @@ function updateBulkBar() {
   bar.style.display = 'flex';
   document.getElementById('bulk-count').textContent = 'Выбрано: ' + selected.size;
 }
-async function deleteTasks(ids, permanent) {
+async function deleteTasks(ids) {
   allTasks = allTasks.filter(t => !ids.includes(t.id));
   ids.forEach(id => selected.delete(id));
   renderTasks();
-  for (const id of ids) {
-    const url = API + '/tasks/' + id + (permanent ? '?permanent=1' : '');
-    await fetch(url, { method: 'DELETE' });
-  }
-  showToast(permanent ? '\u0423\u0434\u0430\u043b\u0435\u043d\u043e: ' + ids.length : '\u0412 \u0430\u0440\u0445\u0438\u0432\u0435: ' + ids.length, async () => {
+  for (const id of ids) { await fetch(API + '/tasks/' + id, { method: 'DELETE' }); }
+  showToast('Удалено: ' + ids.length + ' (в Архиве)', async () => {
     for (const id of ids) { await fetch(API + '/tasks/' + id + '/restore', { method: 'POST' }); }
     loadTasks();
   });
@@ -615,7 +781,9 @@ function toggleRules(force) {
 }
 document.querySelector('.main-nav').addEventListener('click', e => {
   const btn = e.target.closest('.nav-btn');
-  if (btn) switchTab(btn.dataset.tab);
+  if (!btn) return;
+  if (btn.dataset.tab === 'tasks' || btn.dataset.tab === 'create') { openCreate(); return; }
+  switchTab(btn.dataset.tab);
 });
 const taskList = document.getElementById('task-list');
 taskList.addEventListener('click', async e => {
@@ -624,7 +792,8 @@ taskList.addEventListener('click', async e => {
   const id = parseInt(btn.dataset.id, 10);
   const act = btn.dataset.act;
   if (act === 'download') { downloadFile(btn.dataset.id, btn.dataset.name); return; }
-  if (act === 'open') { openDrawer(id); return; }
+  if (act === 'open') { openTaskMenu(id); return; }
+  if (act === 'chat') { openDrawer(id); return; }
   if (act === 'edit') { openDrawer(id); return; }
   if (id < 0) return;
   try {
@@ -638,11 +807,10 @@ taskList.addEventListener('click', async e => {
       });
       if (!r.ok) { if (t) t.status = old; renderTasks(); const d = await r.json(); alert(d.error); return; }
       showToast('Статус обновлён');
-    } else if (act === 'archive') {
-      await deleteTasks([id], false);
     } else if (act === 'delete') {
-      if (!confirm('\u0423\u0434\u0430\u043b\u0438\u0442\u044C \u0431\u0435\u0437\u0432\u043E\u0437\u0432\u0440\u0430\u0442\u043D\u043E?')) return;
-      await deleteTasks([id], true);
+      const t = allTasks.find(x => x.id === id);
+      if (!confirm('Удалить задачу «' + (t ? t.title : id) + '»? Она будет перемещена в Архив.')) return;
+      await deleteTasks([id]);
     }
   } catch (err) { console.error('action', err); }
 });
@@ -712,7 +880,7 @@ viewsRow().addEventListener('click', e => {
 });
 document.getElementById('bulk-delete').addEventListener('click', () => {
   if (selected.size === 0) return;
-  deleteTasks(Array.from(selected), false);
+  deleteTasks(Array.from(selected));
 });
 document.getElementById('bulk-clear').addEventListener('click', () => { selected.clear(); renderTasks(); });
 document.getElementById('drawer-close').addEventListener('click', closeDrawer);
@@ -748,8 +916,19 @@ document.addEventListener('click', e => {
   if (drop.classList.contains('open') && !drop.contains(e.target)) toggleRules(false);
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { toggleRules(false); closeDrawer(); }
+  if (e.key === 'Escape') { closeModals(); toggleRules(false); closeDrawer(); }
 });
+(function initArchiveBack() {
+  const ap = document.getElementById('archive-panel');
+  if (ap && !document.getElementById('archive-back')) {
+    const b = document.createElement('button');
+    b.id = 'archive-back'; b.className = 'chip'; b.textContent = '\u2190 К задачам';
+    b.style.marginBottom = '10px';
+    ap.insertBefore(b, ap.firstChild);
+    b.addEventListener('click', () => switchTab('tasks'));
+  }
+})();
+ensureModals();
 localStorage.removeItem('token');
 localStorage.removeItem('role');
 localStorage.removeItem('username');
