@@ -6,7 +6,6 @@ let currentView = 'all', searchTerm = '', filterStatus = 'all', sortBy = 'date_d
 let dragId = null;
 let chatTimer = null, chatTaskId = null;
 let chatDraftFiles = [];
-
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -32,7 +31,6 @@ function assigneeNames(t) {
 function assigneeLabel(t) {
   return Array.isArray(t.assignees) && t.assignees.length > 1 ? 'Исполнители' : 'Исполнитель';
 }
-
 const _rawFetch = window.fetch.bind(window);
 window.fetch = async function(url, opts) {
   const isAuth = typeof url === 'string' && url.indexOf('/api/auth') !== -1;
@@ -45,13 +43,11 @@ window.fetch = async function(url, opts) {
   if (!isAuth && res.status === 401) { logout(); }
   return res;
 };
-
 const TABS = {
   tasks: { panel: 'tab-tasks', load: loadTasks },
   create: { panel: 'admin-panel', load: loadUsers },
   archive: { panel: 'archive-panel', load: loadArchive }
 };
-
 function activateTab(name) {
   if (!TABS[name]) name = 'tasks';
   Object.keys(TABS).forEach(k => {
@@ -60,18 +56,15 @@ function activateTab(name) {
   });
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
 }
-
 function switchTab(name) {
   activateTab(name);
   const t = TABS[name];
   if (t && typeof t.load === 'function') t.load();
 }
-
 function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('dashboard').style.display = 'none';
 }
-
 function showDashboard() {
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
@@ -82,7 +75,6 @@ function showDashboard() {
   loadUsers();
   switchTab('tasks');
 }
-
 async function login() {
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
@@ -101,7 +93,6 @@ async function login() {
     } else { alert(data.error); }
   } catch (e) { alert('Server unavailable'); }
 }
-
 function logout() {
   stopPolling();
   chatDraftFiles = [];
@@ -111,7 +102,6 @@ function logout() {
   toggleRules(false);
   showLogin();
 }
-
 async function loadUsers() {
   try {
     const res = await fetch(API + '/users');
@@ -132,7 +122,6 @@ async function loadUsers() {
     });
   } catch (e) { console.error('loadUsers', e); }
 }
-
 function persistUI() {
   localStorage.setItem('gg_ui', JSON.stringify({ view: currentView, search: searchTerm, filter: filterStatus, sort: sortBy }));
 }
@@ -154,7 +143,6 @@ function restoreUI() {
   renderCustomViews();
   syncViewChips();
 }
-
 function viewsRow() { return document.querySelector('.saved-views:not(#counters)'); }
 function injectSaveViewBtn() {
   const row = viewsRow(); if (!row) return;
@@ -171,7 +159,7 @@ function renderCustomViews() {
   customViews.forEach((v, i) => {
     const b = document.createElement('button');
     b.className = 'view-chip'; b.dataset.cview = i;
-    b.innerHTML = escapeHtml(v.name) + ' <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">\u00D7</span>';
+    b.innerHTML = escapeHtml(v.name) + '  <span data-del="' + i + '" style="margin-left:6px;cursor:pointer" title="Удалить вид">\u00D7</span>';
     row.insertBefore(b, saveBtn);
   });
 }
@@ -186,7 +174,6 @@ function applyNamedView(v) {
   const sb = document.getElementById('sort-by'); if (sb) sb.value = sortBy;
   persistUI(); syncViewChips(); renderTasks();
 }
-
 function applyView(tasks) {
   let out = tasks.slice();
   if (currentView === 'mine') out = out.filter(isMineTask);
@@ -208,7 +195,6 @@ function applyView(tasks) {
   if (sortBy === 'status') out.sort((a, b) => String(a.status).localeCompare(String(b.status)));
   return out;
 }
-
 function renderCounters(tasks) {
   const c = { new: 0, in_progress: 0, done: 0 };
   tasks.forEach(t => { if (c[t.status] !== undefined) c[t.status]++; });
@@ -218,7 +204,6 @@ function renderCounters(tasks) {
     '<span class="view-chip st-prog">В работе: ' + c.in_progress + '</span>' +
     '<span class="view-chip st-done">Готово: ' + c.done + '</span>';
 }
-
 function renderTasks() {
   const list = document.getElementById('task-list');
   const view = applyView(allTasks);
@@ -241,12 +226,13 @@ function renderTasks() {
       acts = '<div class="task-actions"><span class="small-note">Создаётся\u2026</span></div>';
     } else {
       acts = '<div class="task-actions">';
-      ['new', 'in_progress', 'done'].forEach(s => {
+      ['new', 'in_progress'].forEach(s => {
         acts += '<button class="chip chip-' + statusClass(s) + '" data-act="status" data-val="' + s + '" data-id="' + t.id + '">' + statusLabel(s) + '</button> ';
       });
+      acts += '<button class="chip" data-act="open" data-id="' + t.id + '">\u0427\u0430\u0442</button> ';
       if (role === 'admin') {
-        acts += '<button class="chip" data-act="edit" data-id="' + t.id + '">Правка</button> ';
-        acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">Удалить</button>';
+        acts += '<button class="chip chip-archive" data-act="archive" data-id="' + t.id + '">\u0410\u0440\u0445\u0438\u0432</button> ';
+        acts += '<button class="chip chip-del" data-act="delete" data-id="' + t.id + '">\u0423\u0434\u0430\u043b\u0438\u0442\u044c</button>';
       }
       acts += '</div>';
     }
@@ -255,7 +241,6 @@ function renderTasks() {
   attachFiles(view);
   updateBulkBar();
 }
-
 async function loadTasks() {
   try {
     const res = await fetch(API + '/tasks');
@@ -265,7 +250,6 @@ async function loadTasks() {
     renderTasks();
   } catch (e) { console.error('loadTasks', e); }
 }
-
 async function attachFiles(tasks) {
   await Promise.all(tasks.map(async t => {
     const box = document.getElementById('files-' + t.id);
@@ -280,7 +264,6 @@ async function attachFiles(tasks) {
     } catch (e) { box.remove(); }
   }));
 }
-
 async function loadArchive() {
   try {
     const res = await fetch(API + '/tasks/archive');
@@ -299,7 +282,6 @@ async function loadArchive() {
     }).join('');
   } catch (e) { console.error('loadArchive', e); }
 }
-
 async function downloadFile(id, name) {
   try {
     const r = await fetch(API + '/files/' + id + '/download');
@@ -312,25 +294,20 @@ async function downloadFile(id, name) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) { console.error('download', e); }
 }
-
 async function createTask() {
   const titleEl = document.getElementById('task-title');
   const descEl = document.getElementById('task-desc');
   const assigneeEl = document.getElementById('task-assignee');
   const fileInput = document.getElementById('task-files');
-
   const title = titleEl ? titleEl.value.trim() : '';
   const description = descEl ? descEl.value : '';
   const ids = assigneeEl ? Array.from(assigneeEl.selectedOptions).map(o => parseInt(o.value, 10)).filter(n => Number.isInteger(n) && n > 0) : [];
   const sel = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
-
   if (sel.length > 3) { alert('Максимум 3 файла за одну загрузку'); return; }
   for (const f of sel) { if (f.size > 10 * 1024 * 1024) { alert('Файл > 10 МБ: ' + f.name); return; } }
   if (!title) { alert('Название обязательно'); return; }
-
   const tempId = -Date.now();
   const chosen = usersCache.filter(u => ids.indexOf(u.id) !== -1).map(u => ({ id: u.id, username: u.username }));
-
   allTasks.unshift({
     id: tempId,
     title: title,
@@ -342,10 +319,8 @@ async function createTask() {
     creator_username: me,
     created_at: new Date().toISOString()
   });
-
   activateTab('tasks');
   renderTasks();
-
   try {
     const res = await fetch(API + '/tasks', {
       method: 'POST',
@@ -359,9 +334,7 @@ async function createTask() {
       alert(data.error);
       return;
     }
-
     allTasks = allTasks.map(t => t.id === tempId ? data : t);
-
     if (sel.length) {
       const fd = new FormData();
       sel.forEach(f => fd.append('files', f));
@@ -372,11 +345,9 @@ async function createTask() {
         alert('Задача создана, но загрузка не удалась: ' + (ud.error || ''));
       }
     }
-
     if (titleEl) titleEl.value = '';
     if (descEl) descEl.value = '';
     if (fileInput) fileInput.value = '';
-
     renderTasks();
     showToast('Задача создана');
   } catch (e) {
@@ -385,7 +356,6 @@ async function createTask() {
     console.error('createTask', e);
   }
 }
-
 function refreshDrawerFiles(taskId) {
   const box = document.getElementById('drawer-files');
   if (!box) return;
@@ -394,17 +364,15 @@ function refreshDrawerFiles(taskId) {
     box.innerHTML = fs.map(f => '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name) + '">\u{1F4CE} ' + escapeHtml(f.original_name) + '</button>').join('');
   }).catch(() => { });
 }
-
 function renderChatDraft() {
   const box = document.getElementById('chat-draft');
   if (!box) return;
   if (!chatDraftFiles.length) { box.innerHTML = ''; return; }
   box.innerHTML = chatDraftFiles.map(f =>
     '<span class="chip">\u{1F4CE} ' + escapeHtml(f.name) + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)' +
-    ' <span data-act="draft-remove" data-fid="' + f.id + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430">\u00D7</span></span>'
+    '  <span data-act="draft-remove" data-fid="' + f.id + '" style="margin-left:6px;cursor:pointer" title="\u0423\u0431\u0440\u0430\u0442\u044C \u0438\u0437 \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430">\u00D7</span></span>'
   ).join('');
 }
-
 function openDrawer(id) {
   const t = allTasks.find(x => x.id === id);
   if (!t || t.id < 0) return;
@@ -420,14 +388,14 @@ function openDrawer(id) {
       escapeHtml(u.username) + ' (' + escapeHtml(u.role) + ')</option>'
     ).join('');
     edit =
-      '<div class="field"><label for="edit-title">Название</label><input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
-      '<div class="field"><label for="edit-desc">Описание</label><textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
+      '<div class="field"><label for="edit-title">Название</label> <input type="text" id="edit-title" value="' + escapeHtml(t.title) + '"></div>' +
+      '<div class="field"><label for="edit-desc">Описание</label> <textarea id="edit-desc">' + escapeHtml(t.description || '') + '</textarea></div>' +
       '<div class="form-row">' +
-        '<div class="field"><label for="edit-assignee">Исполнители (можно выбрать несколько: Ctrl/Cmd или Shift)</label>' +
-        '<select id="edit-assignee" multiple size="' + size + '">' + opts + '</select></div>' +
-        '<div class="field"><label for="edit-status">Статус</label><select id="edit-status">' +
-        ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
-        '</select></div>' +
+      '<div class="field"><label for="edit-assignee">Исполнители (можно выбрать несколько: Ctrl/Cmd или Shift)</label>' +
+      '<select id="edit-assignee" multiple size="' + size + '">' + opts + '</select></div>' +
+      '<div class="field"><label for="edit-status">Статус</label> <select id="edit-status">' +
+      ['new', 'in_progress', 'done'].map(s => '<option value="' + s + '"' + (s === t.status ? ' selected' : '') + '>' + statusLabel(s) + '</option>').join('') +
+      '</select></div>' +
       '</div>' +
       '<button class="btn btn-gold" data-act="save-edit" data-id="' + t.id + '">Сохранить</button>';
   }
@@ -436,34 +404,29 @@ function openDrawer(id) {
     '<p><span class="status-badge ' + statusClass(t.status) + '">' + statusLabel(t.status) + '</span></p>' +
     '<p class="task-desc">' + escapeHtml(t.description || '\u2014') + '</p>' +
     '<div class="task-meta"><small>' +
-      escapeHtml(assigneeLabel(t)) + ': ' + escapeHtml(assigneeNames(t)) + '<br>' +
-      'Создал: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) +
+    escapeHtml(assigneeLabel(t)) + ': ' + escapeHtml(assigneeNames(t)) + '<br>' +
+    'Создал: ' + escapeHtml(t.creator_username || '\u2014') + '<br>' + fmtDate(t.created_at) +
     '</small></div>' +
     '<div class="task-actions" id="drawer-files"></div>' +
-    '<div class="chat-section"><h4>Чат задачи</h4><div class="chat-box" id="chat-box"></div>' +
+    '<div class="chat-section"><h4>Чат задачи</h4> <div class="chat-box" id="chat-box"></div>' +
     '<div class="chat-form"><textarea id="chat-body" placeholder="\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435..."></textarea>' +
     '<div id="chat-draft" class="chat-draft" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>' +
     '<input type="file" id="chat-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv,.txt,.md" style="display:none">' +
     '<div class="chat-actions"><button class="chip" data-act="attach-chat">\u{1F4CE} \u0424\u0430\u0439\u043B</button>' +
     '<button class="btn btn-gold" id="chat-send" data-id="' + t.id + '">\u041E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C</button></div></div></div>' + edit;
-
   dr.classList.add('open'); ov.classList.add('open');
-
   const es = document.getElementById('edit-assignee');
   if (es) { es.multiple = true; es.size = Math.max(4, Math.min(8, usersCache.length || 1)); }
-
   refreshDrawerFiles(id);
   renderChatDraft();
   startPolling(id);
 }
-
 function closeDrawer() {
   stopPolling();
   chatDraftFiles = [];
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
 }
-
 function startPolling(taskId) {
   stopPolling();
   chatTaskId = taskId;
@@ -477,7 +440,6 @@ function stopPolling() {
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
   chatTaskId = null;
 }
-
 async function loadChat(taskId) {
   const box = document.getElementById('chat-box');
   if (!box) return;
@@ -493,12 +455,11 @@ async function loadChat(taskId) {
       const fileHtml = filesArr.length ? '<div class="task-actions">' + filesArr.map(f =>
         '<button class="chip" data-act="download" data-id="' + f.id + '" data-name="' + escapeHtml(f.original_name || 'file') + '">\u{1F4CE} ' + escapeHtml(f.original_name || 'file') + ' (' + Math.max(1, Math.round((f.size || 0) / 1024)) + ' KB)</button>'
       ).join('') + '</div>' : '';
-      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b><small>' + fmtDate(m.created_at) + '</small></div>' + body + fileHtml + '</div>';
+      return '<div class="chat-msg' + mine + '"><div class="chat-head"><b>' + escapeHtml(m.author_username || '?') + '</b> <small>' + fmtDate(m.created_at) + '</small></div>' + body + fileHtml + '</div>';
     }).join('');
     box.scrollTop = box.scrollHeight;
   } catch (e) { console.error('loadChat', e); }
 }
-
 async function postMessage(taskId, body, fileIds) {
   try {
     const payload = { task_id: taskId };
@@ -509,7 +470,6 @@ async function postMessage(taskId, body, fileIds) {
     return true;
   } catch (e) { console.error('postMessage', e); return false; }
 }
-
 async function sendChat(taskId) {
   const ta = document.getElementById('chat-body');
   const body = ta ? ta.value.trim() : '';
@@ -523,12 +483,10 @@ async function sendChat(taskId) {
     loadChat(taskId);
   }
 }
-
 function attachChatFile() {
   const inp = document.getElementById('chat-file-input');
   if (inp) { inp.value = ''; inp.click(); }
 }
-
 async function handleChatFileSelect(inp) {
   const list = inp.files ? Array.from(inp.files) : [];
   if (!list.length) return;
@@ -568,7 +526,6 @@ async function handleChatFileSelect(inp) {
   }
   inp.value = '';
 }
-
 async function saveEdit(id) {
   const t = allTasks.find(x => x.id === id);
   if (!t) return;
@@ -610,7 +567,6 @@ async function saveEdit(id) {
     showToast('Сохранено');
   } catch (e) { Object.assign(t, old); renderTasks(); console.error('saveEdit', e); }
 }
-
 function showToast(msg, undoFn) {
   const toast = document.getElementById('toast');
   document.getElementById('toast-msg').textContent = msg;
@@ -622,7 +578,6 @@ function showToast(msg, undoFn) {
   showToast._t = setTimeout(hideToast, 6000);
 }
 function hideToast() { document.getElementById('toast').classList.remove('show'); }
-
 function updateBulkBar() {
   const bar = document.getElementById('bulk-bar');
   if (!bar) return;
@@ -630,18 +585,19 @@ function updateBulkBar() {
   bar.style.display = 'flex';
   document.getElementById('bulk-count').textContent = 'Выбрано: ' + selected.size;
 }
-
-async function deleteTasks(ids) {
+async function deleteTasks(ids, permanent) {
   allTasks = allTasks.filter(t => !ids.includes(t.id));
   ids.forEach(id => selected.delete(id));
   renderTasks();
-  for (const id of ids) { await fetch(API + '/tasks/' + id, { method: 'DELETE' }); }
-  showToast('Удалено: ' + ids.length, async () => {
+  for (const id of ids) {
+    const url = API + '/tasks/' + id + (permanent ? '?permanent=1' : '');
+    await fetch(url, { method: 'DELETE' });
+  }
+  showToast(permanent ? '\u0423\u0434\u0430\u043b\u0435\u043d\u043e: ' + ids.length : '\u0412 \u0430\u0440\u0445\u0438\u0432\u0435: ' + ids.length, async () => {
     for (const id of ids) { await fetch(API + '/tasks/' + id + '/restore', { method: 'POST' }); }
     loadTasks();
   });
 }
-
 function getDragAfterElement(container, y) {
   const els = [...container.querySelectorAll('li.task-card:not(.dragging)')];
   return els.reduce((closest, child) => {
@@ -651,19 +607,16 @@ function getDragAfterElement(container, y) {
     return closest;
   }, { offset: -Infinity, element: null }).element;
 }
-
 function toggleRules(force) {
   const drop = document.getElementById('rules-drop');
   if (!drop) return;
   const open = typeof force === 'boolean' ? force : !drop.classList.contains('open');
   drop.classList.toggle('open', open);
 }
-
 document.querySelector('.main-nav').addEventListener('click', e => {
   const btn = e.target.closest('.nav-btn');
   if (btn) switchTab(btn.dataset.tab);
 });
-
 const taskList = document.getElementById('task-list');
 taskList.addEventListener('click', async e => {
   const btn = e.target.closest('button, .task-title-text');
@@ -685,12 +638,14 @@ taskList.addEventListener('click', async e => {
       });
       if (!r.ok) { if (t) t.status = old; renderTasks(); const d = await r.json(); alert(d.error); return; }
       showToast('Статус обновлён');
+    } else if (act === 'archive') {
+      await deleteTasks([id], false);
     } else if (act === 'delete') {
-      await deleteTasks([id]);
+      if (!confirm('\u0423\u0434\u0430\u043b\u0438\u0442\u044C \u0431\u0435\u0437\u0432\u043E\u0437\u0432\u0440\u0430\u0442\u043D\u043E?')) return;
+      await deleteTasks([id], true);
     }
   } catch (err) { console.error('action', err); }
 });
-
 taskList.addEventListener('change', e => {
   const chk = e.target.closest('.task-check');
   if (!chk) return;
@@ -700,7 +655,6 @@ taskList.addEventListener('change', e => {
   if (card) card.classList.toggle('selected', chk.checked);
   updateBulkBar();
 });
-
 taskList.addEventListener('dragstart', e => {
   const li = e.target.closest('li.task-card');
   if (!li || sortBy !== 'manual') return;
@@ -725,7 +679,6 @@ taskList.addEventListener('dragend', e => {
     .filter(n => Number.isInteger(n) && n > 0);
   localStorage.setItem('gg_order', JSON.stringify(orderIds));
 });
-
 document.getElementById('archive-list').addEventListener('click', async e => {
   const btn = e.target.closest('button');
   if (!btn || btn.dataset.act !== 'restore') return;
@@ -735,11 +688,9 @@ document.getElementById('archive-list').addEventListener('click', async e => {
     loadTasks(); loadArchive();
   } catch (err) { console.error('restore', err); }
 });
-
 document.getElementById('search-input').addEventListener('input', e => { searchTerm = e.target.value; persistUI(); renderTasks(); });
 document.getElementById('filter-status').addEventListener('change', e => { filterStatus = e.target.value; persistUI(); renderTasks(); });
 document.getElementById('sort-by').addEventListener('change', e => { sortBy = e.target.value; persistUI(); renderTasks(); });
-
 viewsRow().addEventListener('click', e => {
   const del = e.target.closest('[data-del]');
   if (del) {
@@ -759,10 +710,9 @@ viewsRow().addEventListener('click', e => {
     renderCustomViews(); syncViewChips();
   }
 });
-
 document.getElementById('bulk-delete').addEventListener('click', () => {
   if (selected.size === 0) return;
-  deleteTasks(Array.from(selected));
+  deleteTasks(Array.from(selected), false);
 });
 document.getElementById('bulk-clear').addEventListener('click', () => { selected.clear(); renderTasks(); });
 document.getElementById('drawer-close').addEventListener('click', closeDrawer);
@@ -788,7 +738,6 @@ document.getElementById('drawer').addEventListener('click', e => {
   const sv = e.target.closest('button[data-act="save-edit"]');
   if (sv) saveEdit(parseInt(sv.dataset.id, 10));
 });
-
 document.getElementById('rules-btn').addEventListener('click', e => {
   e.stopPropagation();
   toggleRules();
@@ -801,7 +750,6 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { toggleRules(false); closeDrawer(); }
 });
-
 localStorage.removeItem('token');
 localStorage.removeItem('role');
 localStorage.removeItem('username');
