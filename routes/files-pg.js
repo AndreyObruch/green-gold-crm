@@ -8,6 +8,17 @@ const { authenticate } = require('../middleware/auth');
 const { logAudit } = require('../middleware/audit');
 const router = express.Router();
 
+function decodeName(name) {
+  if (typeof name !== 'string' || !name) return 'file';
+  if (/[\u00C2-\u00F4][\u0080-\u00BF]/.test(name)) {
+    try {
+      const fixed = Buffer.from(name, 'latin1').toString('utf8');
+      if (fixed && fixed.indexOf('\uFFFD') === -1) return fixed;
+    } catch (e) { }
+  }
+  return name;
+}
+
 const persistentRoot = '/data';
 const uploadDir = process.env.UPLOAD_DIR || (fs.existsSync(persistentRoot) ? path.join(persistentRoot, 'uploads') : path.join(__dirname, '..', 'uploads'));
 if (!fs.existsSync(uploadDir)) {
@@ -74,15 +85,16 @@ async function handleUpload(req, res) {
     }
     const insertedFiles = [];
     for (const file of req.files) {
+      const originalName = decodeName(file.originalname);
       const sha256 = crypto.createHash('sha256').update(fs.readFileSync(file.path)).digest('hex');
       const result = await client.query(
         'INSERT INTO files (task_id, uploader_id, original_name, stored_name, size, mime, sha256) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [taskId, req.user.id, file.originalname, file.filename, file.size, file.mimetype, sha256]
+        [taskId, req.user.id, originalName, file.filename, file.size, file.mimetype, sha256]
       );
       insertedFiles.push({
         id: result.rows[0].id,
-        name: file.originalname,
-        original_name: file.originalname,
+        name: originalName,
+        original_name: originalName,
         size: file.size,
         mime: file.mimetype
       });
@@ -119,7 +131,10 @@ router.get('/', authenticate, async (req, res) => {
       params = [taskId, req.user.id];
     }
     const result = await query(sql, params);
-    res.json(result.rows);
+    res.json(result.rows.map(function (r) {
+      r.original_name = decodeName(r.original_name);
+      return r;
+    }));
   } catch (err) {
     console.error('Get files error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -143,7 +158,7 @@ router.get('/:id/download', authenticate, async (req, res) => {
     if (!hasAccess) return res.status(403).json({ error: 'Forbidden' });
     const filePath = path.join(uploadDir, fileMeta.stored_name);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Physical file missing' });
-    res.download(filePath, fileMeta.original_name, function (err) {
+    res.download(filePath, decodeName(fileMeta.original_name), function (err) {
       if (err) console.error('Download error:', err);
     });
   } catch (err) {
